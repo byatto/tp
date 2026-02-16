@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TrigPoint</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 15 L85 85 L15 85 Z' fill='none' stroke='%230033CC' stroke-width='8'/%3E%3Ccircle cx='50' cy='60' r='6' fill='%230033CC'/%3E%3C/svg%3E" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ─── TRIGPOINT DESIGN SYSTEM (The Surveyor Aesthetic) ─── */
+  :root {
+    /* Palette: Concrete, Signal Blue, Brass, Ink */
+    --bg-canvas: #EAEAEA;       /* The "Field" */
+    --bg-surface: #F5F5F5;      /* The "Paper" */
+    --bg-panel: #FFFFFF;        /* The "Instrument" */
+    
+    --text-main: #111111;
+    --text-muted: #666666;
+    
+    --signal-blue: #0033CC;     /* Primary Action */
+    --signal-blue-dim: #E6EBFA;
+    
+    --brass: #B08D55;           /* Accents / Selection */
+    --brass-dim: #F4F0E9;
+    
+    --danger: #CC2200;
+    --success: #008844;
+    
+    /* Structural */
+    --border-width: 1px;
+    --border-color: #CCCCCC;
+    --border-focus: #0033CC;
+    
+    --font-ui: 'Inter', -apple-system, sans-serif;
+    --font-data: 'JetBrains Mono', monospace;
+    
+    --radius: 2px; /* Brutalist / Sharp */
+    --shadow: 0 2px 0 rgba(0,0,0,0.05);
+  }
+
+  [data-theme="dark"] {
+    --bg-canvas: #111111;
+    --bg-surface: #1A1A1A;
+    --bg-panel: #222222;
+    --text-main: #EEEEEE;
+    --text-muted: #888888;
+    --border-color: #333333;
+    --signal-blue: #3366FF;
+    --signal-blue-dim: #111A33;
+    --brass: #D4AF37;
+    --brass-dim: #2A2518;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--text-main);
+    font-family: var(--font-ui);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* App-like feel */
+  }
+
+  /* ─── APP SHELL ─── */
+  .app-container {
+    max-width: 600px;
+    width: 100%;
+    margin: 0 auto;
+    background: var(--bg-surface);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+  }
+
+  /* ─── HEADER (The Datum Line) ─── */
+  header {
+    padding: 16px 20px;
+    background: var(--bg-panel);
+    border-bottom: 2px solid var(--text-main); /* The Datum Line */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    font-size: 18px;
+    text-transform: uppercase;
+  }
+  
+  .brand-mark {
+    width: 0; 
+    height: 0; 
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 14px solid var(--signal-blue);
+    position: relative;
+  }
+  .brand-mark::after {
+    content:''; position:absolute; left:-2px; top:6px; width:4px; height:4px; background:#fff; border-radius:50%;
+  }
+
+  .sync-status {
+    font-family: var(--font-data);
+    font-size: 10px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+  }
+  .status-dot { width: 8px; height: 8px; background: var(--border-color); border-radius: 50%; }
+  .status-dot.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
+  .status-dot.error { background: var(--danger); }
+  .status-dot.syncing { background: var(--brass); animation: pulse 1s infinite; }
+
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+  /* ─── VIEWPORT ─── */
+  main {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+    scroll-behavior: smooth;
+  }
+
+  .view-section { display: none; padding: 20px; padding-bottom: 100px; animation: fadeIn 0.2s ease; }
+  .view-section.active { display: block; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ─── CAPTURE MODE ─── */
+  .capture-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
+  }
+
+  /* Account Selector (The Context) */
+  .account-selector {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .account-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    border-radius: var(--radius);
+  }
+  .account-btn.selected {
+    background: var(--text-main);
+    color: var(--bg-surface);
+    border-color: var(--text-main);
+  }
+
+  /* The Big Input */
+  .input-area {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  #capture-text {
+    width: 100%;
+    flex: 1;
+    background: var(--bg-surface);
+    border: none;
+    resize: none;
+    font-family: var(--font-data);
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--text-main);
+    outline: none;
+    padding: 0;
+  }
+  #capture-text::placeholder { color: var(--border-color); }
+
+  /* Type Pills (The Categories) */
+  .type-pills {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: auto;
+  }
+  .type-pill {
+    padding: 12px 0;
+    text-align: center;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: var(--radius);
+    transition: all 0.1s;
+  }
+  .type-pill:hover { background: var(--bg-canvas); }
+  .type-pill.selected {
+    background: var(--signal-blue-dim);
+    color: var(--signal-blue);
+    border-color: var(--signal-blue);
+    box-shadow: 0 0 0 1px var(--signal-blue);
+  }
+
+  /* The Capture Button */
+  .capture-btn {
+    width: 100%;
+    padding: 16px;
+    background: var(--signal-blue);
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: none;
+    cursor: pointer;
+    border-radius: var(--radius);
+    margin-top: 12px;
+  }
+  .capture-btn:active { opacity: 0.9; transform: translateY(1px); }
+
+  /* ─── REVIEW MODE ─── */
+  .review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+  }
+  .review-stat { font-family: var(--font-data); font-size: 12px; color: var(--text-muted); }
+
+  .card-stack { display: flex; flex-direction: column; gap: 12px; }
+
+  .card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--border-color);
+    padding: 16px;
+    position: relative;
+    box-shadow: var(--shadow);
+  }
+  /* Context Colors for Cards */
+  .card[data-cat="Task"] { border-left-color: var(--danger); }
+  .card[data-cat="Opp"] { border-left-color: var(--success); }
+  .card[data-cat="Contact"] { border-left-color: var(--brass); }
+  .card[data-cat="News"] { border-left-color: var(--signal-blue); }
+
+  .card-meta {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-data);
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .card-meta span.account { color: var(--text-main); font-weight: 700; }
+
+  .card-body {
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+    white-space: pre-wrap;
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .action-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: var(--radius);
+  }
+  .action-btn:hover { border-color: var(--text-main); color: var(--text-main); }
+  .action-btn.primary { color: var(--signal-blue); border-color: var(--signal-blue-dim); background: var(--signal-blue-dim); }
+
+  /* ─── NAVIGATION ─── */
+  .nav-bar {
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border-color);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 0;
+  }
+  .nav-item {
+    background: transparent;
+    border: none;
+    padding: 16px 0;
+    font-family: var(--font-data);
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-align: center;
+    text-transform: uppercase;
+    position: relative;
+  }
+  .nav-item.active {
+    color: var(--signal-blue);
+    font-weight: 700;
+  }
+  .nav-item.active::after {
+    content:'';
+    position: absolute;
+    top: 0; left: 50%; transform: translateX(-50%);
+    width: 40%; height: 2px; background: var(--signal-blue);
+  }
+
+  /* ─── SETTINGS & MODALS ─── */
+  .settings-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    padding: 20px;
+    margin-top: 20px;
+  }
+  .form-group { margin-bottom: 16px; }
+  .form-label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; color: var(--text-muted); }
+  .form-input { 
+    width: 100%; padding: 8px 12px; 
+    font-family: var(--font-data); font-size: 13px; 
+    border: 1px solid var(--border-color); background: var(--bg-surface);
+    color: var(--text-main); outline: none;
+  }
+  .form-input:focus { border-color: var(--signal-blue); }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-family: var(--font-data);
+    font-size: 12px;
+  }
+
+  /* Toast Notification */
+  .toast {
+    position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--text-main); color: var(--bg-panel);
+    padding: 8px 16px; font-size: 12px; font-weight: 600;
+    opacity: 0; pointer-events: none; transition: all 0.2s;
+    border-radius: var(--radius);
+    display: flex; align-items: center; gap: 8px;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  
+  <header>
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <span>TrigPoint</span>
+    </div>
+    <div class="sync-status" id="sync-ui" title="Cloud Sync">
+      <span id="sync-msg">Local</span>
+      <div class="status-dot" id="sync-dot"></div>
+    </div>
+  </header>
+
+  <main>
+    
+    <section id="view-capture" class="view-section active">
+      <div class="capture-controls">
+        
+        <div>
+          <label class="form-label">Context</label>
+          <div class="account-selector" id="account-list">
+            </div>
+        </div>
+
+        <div class="input-area">
+          <textarea id="capture-text" placeholder="Input stream..."></textarea>
+        </div>
+
+        <div>
+          <label class="form-label">Classify</label>
+          <div class="type-pills" id="category-list">
+            <button class="type-pill selected" data-val="Note">Note</button>
+            <button class="type-pill" data-val="Task">Task</button>
+            <button class="type-pill" data-val="Contact">Contact</button>
+            <button class="type-pill" data-val="Opp">Opp</button>
+          </div>
+        </div>
+
+        <button class="capture-btn" id="btn-capture">Capture [Enter]</button>
+      </div>
+    </section>
+
+    <section id="view-review" class="view-section">
+      <div class="review-header">
+        <h2>Inbox</h2>
+        <span class="review-stat" id="review-count">0 items</span>
+      </div>
+      <div class="card-stack" id="review-stack">
+        </div>
+    </section>
+
+    <section id="view-retrieve" class="view-section">
+      <div class="review-header">
+        <h2>Database</h2>
+      </div>
+      
+      <div class="form-group">
+        <input type="text" class="form-input" id="search-input" placeholder="Search / Filter by Account...">
+      </div>
+      
+      <div class="card-stack" id="retrieve-stack"></div>
+
+      <div class="settings-panel">
+        <h3>Configuration</h3>
+        <br>
+        <div class="form-group">
+          <label class="form-label">Accounts (Comma separated)</label>
+          <input type="text" class="form-input" id="conf-accounts">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Google Script URL</label>
+          <input type="password" class="form-input" id="conf-url">
+        </div>
+        <div class="form-group">
+          <label class="form-label">API Security Key</label>
+          <input type="password" class="form-input" id="conf-key" placeholder="Sent securely in payload">
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="action-btn primary" id="btn-save-conf">Save Config</button>
+          <button class="action-btn" id="btn-export">Export JSON</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="nav-bar">
+    <button class="nav-item active" data-target="capture">Capture</button>
+    <button class="nav-item" data-target="review">Review <span id="nav-badge"></span></button>
+    <button class="nav-item" data-target="retrieve">Retrieve</button>
+  </nav>
+
+  <div class="toast" id="toast">
+    <span id="toast-icon">✓</span> <span id="toast-msg">Captured</span>
+  </div>
+
+</div>
+
+<script>
+/**
+ * TRIGPOINT CORE v1.0
+ * Engineered for utility.
+ */
+
+// --- STATE MANAGEMENT ---
+const DB_KEY = 'trigpoint_db';
+const CONF_KEY = 'trigpoint_conf';
+
+const DEFAULT_CONF = {
+  accounts: ["Personal", "Work"],
+  cloudUrl: "",
+  apiKey: ""
+};
+
+let state = {
+  items: [],
+  conf: loadConf()
+};
+
+// Load Data
+try {
+  const saved = localStorage.getItem(DB_KEY);
+  if (saved) state.items = JSON.parse(saved);
+} catch(e) { console.error("Corrupt DB", e); }
+
+function loadConf() {
+  const c = localStorage.getItem(CONF_KEY);
+  return c ? { ...DEFAULT_CONF, ...JSON.parse(c) } : DEFAULT_CONF;
+}
+
+function save() {
+  localStorage.setItem(DB_KEY, JSON.stringify(state.items));
+  sync();
+  render();
+}
+
+function saveConf() {
+  localStorage.setItem(CONF_KEY, JSON.stringify(state.conf));
+  renderAccountSelector();
+  toast("Configuration Saved");
+}
+
+// --- CLOUD SYNC (Enhanced Security) ---
+function sync() {
+  if (!state.conf.cloudUrl) return;
+  const dot = document.getElementById('sync-dot');
+  const msg = document.getElementById('sync-msg');
+  
+  dot.className = 'status-dot syncing';
+  msg.innerText = 'Syncing...';
+
+  // We send the API Key inside the payload.
+  // The Google Apps Script should verify e.parameter.key or payload.key
+  const payload = {
+    key: state.conf.apiKey, // SECURITY: Sent here
+    items: state.items,
+    timestamp: Date.now()
+  };
+
+  fetch(state.conf.cloudUrl, {
+    method: 'POST',
+    mode: 'no-cors', // Standard for GAS Web Apps
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(() => {
+    dot.className = 'status-dot active';
+    msg.innerText = 'Synced';
+    setTimeout(() => { msg.innerText = 'Cloud'; }, 2000);
+  })
+  .catch(e => {
+    dot.className = 'status-dot error';
+    msg.innerText = 'Error';
+    console.error(e);
+  });
+}
+
+// --- DOM ELEMENTS ---
+const dom = {
+  captureText: document.getElementById('capture-text'),
+  accountList: document.getElementById('account-list'),
+  categoryList: document.getElementById('category-list'),
+  reviewStack: document.getElementById('review-stack'),
+  retrieveStack: document.getElementById('retrieve-stack'),
+  reviewCount: document.getElementById('review-count'),
+  navBadge: document.getElementById('nav-badge'),
+  searchInput: document.getElementById('search-input'),
+  confAccounts: document.getElementById('conf-accounts'),
+  confUrl: document.getElementById('conf-url'),
+  confKey: document.getElementById('conf-key')
+};
+
+// --- LOGIC ---
+let currentAccount = state.conf.accounts[0];
+let currentCategory = "Note";
+
+function init() {
+  renderAccountSelector();
+  dom.confAccounts.value = state.conf.accounts.join(", ");
+  dom.confUrl.value = state.conf.cloudUrl;
+  dom.confKey.value = state.conf.apiKey;
+  render();
+}
+
+function renderAccountSelector() {
+  dom.accountList.innerHTML = state.conf.accounts.map(acc => 
+    `<button class="account-btn ${acc === currentAccount ? 'selected' : ''}" onclick="selectAccount('${acc}')">${acc}</button>`
+  ).join('');
+}
+
+window.selectAccount = (acc) => {
+  currentAccount = acc;
+  renderAccountSelector();
+  dom.captureText.focus();
+};
+
+// Handle Category Pills
+dom.categoryList.addEventListener('click', (e) => {
+  if(e.target.classList.contains('type-pill')) {
+    document.querySelectorAll('.type-pill').forEach(b => b.classList.remove('selected'));
+    e.target.classList.add('selected');
+    currentCategory = e.target.dataset.val;
+    dom.captureText.focus();
+  }
+});
+
+// Capture Action
+function capture() {
+  const text = dom.captureText.value.trim();
+  if(!text) return;
+
+  const item = {
+    id: Date.now().toString(36),
+    text: text,
+    account: currentAccount,
+    category: currentCategory,
+    status: 'inbox', // inbox, action, reference, done
+    created: Date.now()
+  };
+
+  state.items.unshift(item);
+  dom.captureText.value = '';
+  save();
+  toast("Captured");
+  
+  // Reset category to default after capture? No, keep context.
+}
+
+document.getElementById('btn-capture').addEventListener('click', capture);
+dom.captureText.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) capture();
+});
+
+// Rendering Lists
+function render() {
+  // Review View (Inbox Only)
+  const inbox = state.items.filter(i => i.status === 'inbox');
+  dom.reviewCount.innerText = `${inbox.length} unprocessed`;
+  dom.navBadge.innerText = inbox.length > 0 ? `(${inbox.length})` : '';
+  
+  if (inbox.length === 0) {
+    dom.reviewStack.innerHTML = `<div class="empty-state">Field clear. No data pending.</div>`;
+  } else {
+    dom.reviewStack.innerHTML = inbox.map(i => renderCard(i, true)).join('');
+  }
+
+  // Retrieve View (All except done, unless searched)
+  const query = dom.searchInput.value.toLowerCase();
+  let db = state.items.filter(i => i.status !== 'inbox'); // Show processed
+  
+  if (query) {
+    db = state.items.filter(i => 
+      i.text.toLowerCase().includes(query) || 
+      i.account.toLowerCase().includes(query) ||
+      i.category.toLowerCase().includes(query)
+    );
+  } else {
+    db = db.slice(0, 50); // Limit render for perf
+  }
+
+  dom.retrieveStack.innerHTML = db.length ? db.map(i => renderCard(i, false)).join('') : `<div class="empty-state">No records found.</div>`;
+}
+
+function renderCard(item, isReview) {
+  const date = new Date(item.created).toLocaleDateString(undefined, {month:'short', day:'numeric'});
+  
+  let actions = '';
+  if (isReview) {
+    actions = `
+      <button class="action-btn primary" onclick="setStatus('${item.id}', 'action')">Action</button>
+      <button class="action-btn" onclick="setStatus('${item.id}', 'reference')">Ref</button>
+      <button class="action-btn" onclick="setStatus('${item.id}', 'done')">Dismiss</button>
+    `;
+  } else {
+    actions = `
+      <button class="action-btn" onclick="deleteItem('${item.id}')">Delete</button>
+      <button class="action-btn" onclick="setStatus('${item.id}', 'inbox')">Re-Open</button>
+    `;
+  }
+
+  return `
+    <div class="card" data-cat="${item.category}">
+      <div class="card-meta">
+        <span class="account">${item.account}</span>
+        <span>${item.category} • ${date}</span>
+      </div>
+      <div class="card-body">${escapeHtml(item.text)}</div>
+      <div class="card-actions">
+        ${actions}
+      </div>
+    </div>
+  `;
+}
+
+// Item Actions
+window.setStatus = (id, status) => {
+  const i = state.items.find(x => x.id === id);
+  if (i) { 
+    i.status = status; 
+    save(); 
+    render(); 
+  }
+};
+
+window.deleteItem = (id) => {
+  if(confirm('Delete record?')) {
+    state.items = state.items.filter(x => x.id !== id);
+    save();
+    render();
+  }
+};
+
+// Navigation
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+    
+    btn.classList.add('active');
+    document.getElementById(`view-${btn.dataset.target}`).classList.add('active');
+    
+    if (btn.dataset.target === 'capture') dom.captureText.focus();
+    render();
+  });
+});
+
+// Config Logic
+document.getElementById('btn-save-conf').addEventListener('click', () => {
+  state.conf.accounts = dom.confAccounts.value.split(',').map(s => s.trim()).filter(s => s);
+  state.conf.cloudUrl = dom.confUrl.value.trim();
+  state.conf.apiKey = dom.confKey.value.trim();
+  saveConf();
+});
+
+document.getElementById('btn-export').addEventListener('click', () => {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+  const el = document.createElement('a');
+  el.setAttribute("href", dataStr);
+  el.setAttribute("download", "trigpoint_backup.json");
+  document.body.appendChild(el);
+  el.click();
+  el.remove();
+});
+
+dom.searchInput.addEventListener('input', render);
+
+// Utils
+function escapeHtml(text) {
+  if (!text) return text;
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').innerText = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// Start
+init();
+
+</script>
+</body>
+</html>
