@@ -4,286 +4,190 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>TrigPoint</title>
-
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#EAEAEA">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 15 L85 85 L15 85 Z' fill='none' stroke='%230033CC' stroke-width='8'/%3E%3Ccircle cx='50' cy='60' r='6' fill='%230033CC'/%3E%3C/svg%3E" type="image/svg+xml">
-
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-
 <style>
-  /* ─── THEME VARIABLES ─── */
   :root {
-    --bg-canvas: #EAEAEA;
-    --bg-surface: #F5F5F5;
-    --bg-panel: #FFFFFF;
-    
-    --text-main: #111111;
-    --text-muted: #666666;
-    
-    --signal-blue: #0033CC;
-    --signal-blue-dim: #E6EBFA;
-    
-    --border-color: #CCCCCC;
-    
-    --font-ui: 'Inter', -apple-system, sans-serif;
-    --font-data: 'JetBrains Mono', monospace;
-    
-    --radius: 2px;
-    --shadow: 0 2px 0 rgba(0,0,0,0.05);
-    
-    /* Layout Constants */
-    --nav-height: 60px;
-    --header-height: 60px;
+    --bg-canvas: #EAEAEA; --bg-surface: #F5F5F5; --bg-panel: #FFFFFF;
+    --text-main: #111111; --text-muted: #666666;
+    --signal-blue: #0033CC; --signal-blue-dim: #E6EBFA;
+    --danger: #CC2200; --border-color: #CCCCCC;
+    --font-ui: 'Inter', -apple-system, sans-serif; --font-data: 'JetBrains Mono', monospace;
+    --radius: 4px; --shadow: 0 2px 4px rgba(0,0,0,0.05);
+    --nav-height: 60px; --header-height: 50px;
   }
-
   [data-theme="dark"] {
-    --bg-canvas: #111111;
-    --bg-surface: #1A1A1A;
-    --bg-panel: #222222;
-    --text-main: #EEEEEE;
-    --text-muted: #888888;
-    --border-color: #333333;
-    --signal-blue: #3366FF;
-    --signal-blue-dim: #111A33;
+    --bg-canvas: #111111; --bg-surface: #1A1A1A; --bg-panel: #222222;
+    --text-main: #EEEEEE; --text-muted: #888888; --border-color: #333333;
+    --signal-blue: #3366FF; --signal-blue-dim: #111A33;
   }
-
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
-  /* POCKETPIP LAYOUT ENGINE */
+  
   body {
-    background-color: var(--bg-canvas);
-    color: var(--text-main);
-    font-family: var(--font-ui);
-    min-height: 100vh; /* Allow natural scrolling */
-    line-height: 1.5;
-    /* Prevent rubber-banding on iOS */
-    overscroll-behavior-y: none; 
+    background-color: var(--bg-canvas); color: var(--text-main); font-family: var(--font-ui);
+    min-height: 100vh; line-height: 1.5; overscroll-behavior-y: none;
   }
-
   .app-container {
-    max-width: 600px;
-    margin: 0 auto;
-    background: var(--bg-surface);
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    box-shadow: 0 0 20px rgba(0,0,0,0.1);
-    /* Space for Fixed Nav */
+    max-width: 600px; margin: 0 auto; background: var(--bg-surface); min-height: 100vh;
+    display: flex; flex-direction: column; position: relative;
     padding-bottom: calc(var(--nav-height) + 20px);
   }
 
-  /* ─── HEADER ─── */
+  /* ─── HEADER & ACCOUNT PILLS ─── */
   header {
-    height: var(--header-height);
-    padding: 0 20px;
-    background: var(--bg-panel);
-    border-bottom: 2px solid var(--text-main);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky; /* Stick to top */
-    top: 0;
-    z-index: 100;
+    background: var(--bg-panel); border-bottom: 1px solid var(--border-color);
+    padding: 10px 16px; position: sticky; top: 0; z-index: 100;
+    display: flex; flex-direction: column; gap: 10px;
   }
-
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-weight: 800;
-    letter-spacing: -0.04em;
-    font-size: 18px;
-    text-transform: uppercase;
-  }
-  
+  .header-top { display: flex; justify-content: space-between; align-items: center; }
+  .brand { font-weight: 800; font-size: 16px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
   .brand-mark {
-    width: 0; height: 0; 
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-bottom: 14px solid var(--signal-blue);
-    position: relative;
+    width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent;
+    border-bottom: 10px solid var(--signal-blue); position: relative;
   }
-  .brand-mark::after {
-    content:''; position:absolute; left:-2px; top:6px; width:4px; height:4px; background:#fff; border-radius:50%;
+  .settings-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted); }
+
+  /* Account Scroll Bar */
+  .account-scroll {
+    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none;
+  }
+  .account-scroll::-webkit-scrollbar { display: none; }
+  .account-pill {
+    flex: 0 0 auto; padding: 6px 12px; background: var(--bg-surface);
+    border: 1px solid var(--border-color); border-radius: 20px;
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    cursor: pointer; display: flex; align-items: center; gap: 6px;
+    transition: all 0.2s; text-transform: uppercase;
+  }
+  .account-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+  .account-pill.active {
+    background: var(--bg-panel); color: var(--text-main);
+    border-color: currentColor; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
 
-  .sync-status {
-    font-family: var(--font-data); font-size: 10px; text-transform: uppercase;
-    display: flex; align-items: center; gap: 6px; color: var(--text-muted);
-  }
-  .status-dot { width: 8px; height: 8px; background: var(--border-color); border-radius: 50%; }
-  .status-dot.active { background: #008844; box-shadow: 0 0 8px #008844; }
-  .status-dot.error { background: #CC2200; }
-  .status-dot.syncing { background: #D4AF37; animation: pulse 1s infinite; }
-  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-
-  /* ─── MAIN CONTENT ─── */
-  main {
-    flex: 1;
-    padding: 20px;
-    /* No overflow property here - let Body handle scroll */
-  }
-
+  /* ─── MAIN ─── */
+  main { flex: 1; padding: 20px; }
   .view-section { display: none; animation: fadeIn 0.2s ease; }
   .view-section.active { display: block; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-  /* ─── CAPTURE UI ─── */
+  /* ─── CAPTURE ─── */
   .capture-controls { display: flex; flex-direction: column; gap: 16px; }
-
-  /* Account Selector */
-  .account-selector {
-    display: flex; overflow-x: auto; gap: 8px; padding-bottom: 8px;
-    border-bottom: 1px solid var(--border-color);
-    scrollbar-width: none; /* Hide scrollbar */
-  }
-  .account-selector::-webkit-scrollbar { display: none; }
-
-  .account-btn {
-    background: transparent;
-    border: 1px solid var(--border-color);
-    padding: 8px 14px; /* Larger touch target */
-    font-size: 12px; font-weight: 600; text-transform: uppercase;
-    color: var(--text-muted); cursor: pointer; white-space: nowrap;
-    border-radius: var(--radius);
-    display: flex; align-items: center; gap: 6px;
-    transition: all 0.2s;
-  }
-  .account-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
-  
-  .account-btn.selected {
-    background: var(--bg-panel);
-    border-color: currentColor; 
-    color: var(--text-main);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-  }
-
-  /* Input */
-  .input-area { width: 100%; }
   #capture-text {
-    width: 100%; min-height: 150px; /* Explicit height */
-    background: var(--bg-surface); border: none;
-    resize: none; font-family: var(--font-data); font-size: 16px; line-height: 1.6;
-    color: var(--text-main); outline: none; padding: 10px 0;
+    width: 100%; min-height: 180px; padding: 16px;
+    background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: var(--radius);
+    font-family: var(--font-data); font-size: 16px; color: var(--text-main); outline: none; resize: none;
   }
-  #capture-text::placeholder { color: var(--border-color); }
-
-  /* Pills */
+  #capture-text:focus { border-color: var(--signal-blue); box-shadow: 0 0 0 1px var(--signal-blue-dim); }
+  
   .type-pills { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .type-pill {
-    padding: 12px 0; text-align: center; background: var(--bg-panel);
-    border: 1px solid var(--border-color);
-    font-family: var(--font-ui); font-size: 12px; font-weight: 600;
-    color: var(--text-muted); cursor: pointer; border-radius: var(--radius);
-    transition: all 0.1s;
+    padding: 10px 0; text-align: center; background: var(--bg-panel);
+    border: 1px solid var(--border-color); border-radius: var(--radius);
+    font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer;
   }
   .type-pill.selected {
-    background: var(--signal-blue-dim); color: var(--signal-blue);
-    border-color: var(--signal-blue); box-shadow: 0 0 0 1px var(--signal-blue);
+    background: var(--signal-blue-dim); color: var(--signal-blue); border-color: var(--signal-blue);
   }
-
-  /* Log Button */
+  
   .capture-btn {
-    width: 100%; padding: 16px;
-    background: var(--signal-blue); color: #fff;
-    border: none; cursor: pointer; border-radius: var(--radius);
-    margin-top: 12px; display: flex; flex-direction: column; align-items: center;
-    justify-content: center; gap: 2px;
+    width: 100%; padding: 14px; background: var(--signal-blue); color: #fff;
+    border: none; border-radius: var(--radius); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
   }
-  .capture-btn:active { opacity: 0.9; transform: translateY(1px); }
-  .btn-label { font-weight: 800; font-size: 16px; letter-spacing: 0.05em; text-transform: uppercase; }
-  .btn-hint { font-size: 10px; opacity: 0.7; font-family: var(--font-data); }
+  .btn-label { font-weight: 800; font-size: 14px; letter-spacing: 0.05em; }
+  .btn-hint { font-size: 10px; opacity: 0.8; font-family: var(--font-data); }
 
-  /* ─── CARDS & LISTS ─── */
-  .review-header {
-    display: flex; justify-content: space-between; align-items: baseline;
-    margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;
-  }
-  .review-stat { font-family: var(--font-data); font-size: 12px; color: var(--text-muted); }
-
-  .card-stack { display: flex; flex-direction: column; gap: 12px; }
-
+  /* ─── CARDS ─── */
+  .card-stack { display: flex; flex-direction: column; gap: 10px; }
   .card {
-    background: var(--bg-panel);
-    border: 1px solid var(--border-color);
-    border-left: 4px solid #ccc;
-    padding: 16px; position: relative; box-shadow: var(--shadow);
+    background: var(--bg-panel); border: 1px solid var(--border-color);
+    border-left-width: 4px; padding: 14px; border-radius: var(--radius);
+    box-shadow: var(--shadow);
   }
-
   .card-meta {
-    display: flex; justify-content: space-between;
-    font-family: var(--font-data); font-size: 10px; text-transform: uppercase;
-    color: var(--text-muted); margin-bottom: 8px;
+    display: flex; justify-content: space-between; font-family: var(--font-data);
+    font-size: 10px; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;
   }
-  .card-meta span.account { color: var(--text-main); font-weight: 700; }
-
-  .card-body { font-size: 14px; line-height: 1.5; margin-bottom: 12px; white-space: pre-wrap; }
-
-  .card-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .card-body { font-size: 14px; margin-bottom: 10px; white-space: pre-wrap; word-break: break-word; }
+  .card-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .action-btn {
-    background: transparent; border: 1px solid var(--border-color);
-    padding: 6px 12px; font-size: 11px; font-weight: 600;
-    cursor: pointer; color: var(--text-muted); border-radius: var(--radius);
+    background: none; border: 1px solid var(--border-color); padding: 4px 10px;
+    font-size: 11px; border-radius: var(--radius); cursor: pointer; color: var(--text-muted);
   }
   .action-btn:hover { border-color: var(--text-main); color: var(--text-main); }
 
-  /* ─── FIXED BOTTOM NAV ─── */
-  .nav-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    height: var(--nav-height);
-    background: var(--bg-panel); 
-    border-top: 1px solid var(--border-color);
-    display: grid; grid-template-columns: 1fr 1fr 1fr;
-    z-index: 1000;
-    padding-bottom: env(safe-area-inset-bottom); /* iOS Home Bar spacing */
-    /* Center layout constraint */
-    max-width: 600px; margin: 0 auto; 
+  /* ─── FOOTER TOOLS (Retrieve Tab) ─── */
+  .data-tools {
+    margin-top: 40px; border-top: 1px solid var(--border-color); padding-top: 20px;
+    display: flex; flex-direction: column; gap: 10px;
   }
+  .tool-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+  .tool-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .text-btn {
+    font-size: 12px; text-decoration: underline; background: none; border: none;
+    color: var(--text-muted); cursor: pointer; padding: 5px 0;
+  }
+  .text-btn.danger { color: var(--danger); }
   
+  /* ─── NAV ─── */
+  .nav-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-height);
+    background: var(--bg-panel); border-top: 1px solid var(--border-color);
+    display: grid; grid-template-columns: 1fr 1fr 1fr; z-index: 900;
+    max-width: 600px; margin: 0 auto; padding-bottom: env(safe-area-inset-bottom);
+  }
   .nav-item {
-    background: transparent; border: none;
-    font-family: var(--font-data); font-size: 12px; color: var(--text-muted);
-    cursor: pointer; text-align: center; text-transform: uppercase;
-    display: flex; align-items: center; justify-content: center;
-    position: relative;
+    background: none; border: none; font-family: var(--font-data); font-size: 11px;
+    color: var(--text-muted); text-transform: uppercase; cursor: pointer;
   }
   .nav-item.active { color: var(--signal-blue); font-weight: 700; }
-  .nav-item.active::after {
-    content:''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    width: 40%; height: 2px; background: var(--signal-blue);
-  }
 
-  /* ─── SETTINGS & INPUTS ─── */
-  .settings-panel {
-    background: var(--bg-panel); border: 1px solid var(--border-color);
-    padding: 20px; margin-top: 20px;
+  /* ─── MODAL ─── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
+    z-index: 2000; display: none; align-items: center; justify-content: center; padding: 20px;
   }
-  .form-group { margin-bottom: 16px; }
-  .form-label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; color: var(--text-muted); }
-  .form-input { 
-    width: 100%; padding: 10px; font-family: var(--font-data); font-size: 14px; 
-    border: 1px solid var(--border-color); background: var(--bg-surface);
-    color: var(--text-main); outline: none; border-radius: var(--radius);
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg-panel); width: 100%; max-width: 400px;
+    border-radius: 8px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
   }
-  .form-input:focus { border-color: var(--signal-blue); }
+  .modal h3 { font-size: 16px; margin-bottom: 16px; text-transform: uppercase; }
+  .modal-section { margin-bottom: 20px; }
+  .modal-label { font-size: 11px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 6px; }
+  .modal-input {
+    width: 100%; padding: 10px; border: 1px solid var(--border-color);
+    border-radius: var(--radius); font-size: 14px; outline: none; background: var(--bg-surface);
+  }
+  .modal-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .color-input { width: 40px; padding: 2px; height: 38px; cursor: pointer; border: 1px solid var(--border-color); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .modal-btn {
+    padding: 8px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-color); background: none;
+  }
+  .modal-btn.primary { background: var(--signal-blue); color: white; border-color: var(--signal-blue); }
+  .modal-btn.danger { background: var(--danger); color: white; border-color: var(--danger); }
+  
+  .account-list-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px; background: var(--bg-surface); border: 1px solid var(--border-color);
+    margin-bottom: 6px; font-size: 13px; border-radius: var(--radius);
+  }
+  .rm-btn { color: var(--danger); cursor: pointer; font-weight: bold; padding: 0 8px; }
 
-  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); font-family: var(--font-data); font-size: 12px; }
-
-  /* Toast Notification */
+  /* Toast */
   .toast {
-    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
-    background: var(--text-main); color: var(--bg-panel);
-    padding: 10px 20px; font-size: 13px; font-weight: 600;
-    opacity: 0; pointer-events: none; transition: all 0.2s;
-    border-radius: var(--radius); display: flex; align-items: center; gap: 8px; z-index: 2000;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: var(--text-main); color: var(--bg-panel); padding: 8px 16px;
+    border-radius: 20px; font-size: 12px; font-weight: 600; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s; z-index: 3000;
   }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
+  .toast.show { opacity: 1; }
+  .empty-state { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -291,88 +195,61 @@
 <div class="app-container">
   
   <header>
-    <div class="brand">
-      <div class="brand-mark"></div>
-      <span>TrigPoint</span>
+    <div class="header-top">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <span>TrigPoint</span>
+      </div>
+      <button class="settings-btn" id="open-settings" title="Settings">⚙</button>
     </div>
-    <div class="sync-status" id="sync-ui" title="Cloud Sync">
-      <span id="sync-msg">Local</span>
-      <div class="status-dot" id="sync-dot"></div>
-    </div>
+    <div class="account-scroll" id="account-pills">
+      </div>
   </header>
 
   <main>
-    
     <section id="view-capture" class="view-section active">
       <div class="capture-controls">
+        <textarea id="capture-text" placeholder="Log datum..."></textarea>
         
-        <div>
-          <label class="form-label">Context</label>
-          <div class="account-selector" id="account-list"></div>
-        </div>
-
-        <div class="input-area">
-          <textarea id="capture-text" placeholder="Input stream..."></textarea>
-        </div>
-
-        <div>
-          <label class="form-label">Classify</label>
-          <div class="type-pills" id="category-list">
-            <button class="type-pill" data-val="Note">Note</button>
-            <button class="type-pill" data-val="Task">Task</button>
-            <button class="type-pill" data-val="Contact">Contact</button>
-            <button class="type-pill" data-val="Opp">Opp</button>
-          </div>
+        <div class="type-pills" id="category-list">
+          <button class="type-pill" data-val="Note">Note</button>
+          <button class="type-pill" data-val="Task">Task</button>
+          <button class="type-pill" data-val="Contact">Contact</button>
+          <button class="type-pill" data-val="Opp">Opp</button>
         </div>
 
         <button class="capture-btn" id="btn-capture">
-          <span class="btn-label">LOG</span>
+          <span class="btn-label">LOG POINT</span>
           <span class="btn-hint">Ctrl + Enter</span>
         </button>
       </div>
     </section>
 
     <section id="view-review" class="view-section">
-      <div class="review-header">
-        <h2>Inbox</h2>
-        <span class="review-stat" id="review-count">0 items</span>
+      <div style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:flex-end;">
+        <h2 style="font-size:18px;">Inbox</h2>
+        <span style="font-size:12px; color:var(--text-muted);" id="review-count">0 items</span>
       </div>
       <div class="card-stack" id="review-stack"></div>
     </section>
 
     <section id="view-retrieve" class="view-section">
-      <div class="review-header">
-        <h2>Database</h2>
-      </div>
-      
-      <div class="form-group">
-        <input type="text" class="form-input" id="search-input" placeholder="Search / Filter...">
-      </div>
-      
+      <input type="text" id="search-input" class="modal-input" placeholder="Search database..." style="margin-bottom:15px;">
       <div class="card-stack" id="retrieve-stack"></div>
-
-      <div class="settings-panel">
-        <h3>Configuration</h3>
-        <br>
-        <div class="form-group">
-          <label class="form-label">Accounts (Format: Name:Color)</label>
-          <input type="text" class="form-input" id="conf-accounts" placeholder="Personal:#FF9F1C, Work:#2EC4B6">
+      
+      <div class="data-tools">
+        <div class="tool-label">Data Maintenance</div>
+        <div class="tool-row">
+          <button class="text-btn" id="btn-sync-now">Force Cloud Sync</button>
+          <button class="text-btn" id="btn-export">Backup (JSON)</button>
+          <button class="text-btn" id="btn-import">Restore</button>
         </div>
-        <div class="form-group">
-          <label class="form-label">Google Script URL</label>
-          <input type="password" class="form-input" id="conf-url">
-        </div>
-        <div class="form-group">
-          <label class="form-label">API Security Key</label>
-          <input type="password" class="form-input" id="conf-key">
-        </div>
-        <div style="display:flex; gap:10px;">
-          <button class="action-btn" id="btn-save-conf">Save Config</button>
-          <button class="action-btn" id="btn-export">Export JSON</button>
+        <div class="tool-row">
+          <button class="text-btn danger" id="btn-empty-trash">Empty Trash</button>
+          <button class="text-btn danger" id="btn-reset">Reset App</button>
         </div>
       </div>
     </section>
-
   </main>
 
   <nav class="nav-bar">
@@ -383,44 +260,69 @@
 
 </div>
 
-<div class="toast" id="toast">
-  <span id="toast-icon">✓</span> <span id="toast-msg">Logged</span>
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <h3>Configuration</h3>
+    
+    <div class="modal-section">
+      <span class="modal-label">Manage Accounts</span>
+      <div id="settings-account-list"></div>
+      <div class="modal-row" style="margin-top:10px;">
+        <input type="text" id="new-acc-name" class="modal-input" placeholder="New Account Name">
+        <input type="color" id="new-acc-color" class="color-input" value="#0033CC">
+      </div>
+      <button class="action-btn" id="btn-add-acc" style="width:100%">+ Add Account</button>
+    </div>
+
+    <div class="modal-section">
+      <span class="modal-label">Cloud Connection</span>
+      <input type="password" id="conf-url" class="modal-input" placeholder="Script URL" style="margin-bottom:8px;">
+      <input type="password" id="conf-key" class="modal-input" placeholder="API Security Key">
+    </div>
+
+    <div class="modal-actions">
+      <button class="modal-btn" id="close-settings">Close</button>
+      <button class="modal-btn primary" id="save-settings">Save</button>
+    </div>
+  </div>
 </div>
 
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <h3 id="confirm-title">Are you sure?</h3>
+    <p id="confirm-msg" style="font-size:13px; color:var(--text-muted); margin-bottom:20px;"></p>
+    <div class="modal-actions">
+      <button class="modal-btn" id="confirm-cancel">Cancel</button>
+      <button class="modal-btn danger" id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Log Saved</div>
+<input type="file" id="import-file" accept=".json" style="display:none">
+
 <script>
-/**
- * TRIGPOINT v2.0
- * Engine: PocketPip | Skin: Surveyor
+/** * TRIGPOINT v3.0
+ * Integrated Account Filters & Safeguards
  */
 
-// --- STATE MANAGEMENT ---
-const DB_KEY = 'trigpoint_db';
-const CONF_KEY = 'trigpoint_conf';
+// --- CONFIG ---
+const DB_KEY = 'trigpoint_db_v2';
+const CONF_KEY = 'trigpoint_conf_v2';
 
 const DEFAULT_CONF = {
-  accountsStr: "Personal:#FF9F1C, Work:#2EC4B6", 
+  accounts: [{name: "Personal", color: "#FF9F1C"}, {name: "Work", color: "#2EC4B6"}],
   cloudUrl: "",
   apiKey: ""
 };
 
-let state = {
-  items: [],
-  conf: loadConf()
-};
+let state = { items: [], conf: loadConf() };
+let ui = { activeAccount: null, category: null, currentView: 'capture' };
 
-function getParsedAccounts() {
-  const raw = state.conf.accountsStr || "Personal:#999";
-  return raw.split(',').map(s => {
-    const [name, color] = s.split(':');
-    return { name: name.trim(), color: color ? color.trim() : '#666' };
-  }).filter(a => a.name);
-}
+// Initialize Active Account
+if(state.conf.accounts.length > 0) ui.activeAccount = state.conf.accounts[0].name;
 
-try {
-  const saved = localStorage.getItem(DB_KEY);
-  if (saved) state.items = JSON.parse(saved);
-} catch(e) { console.error("Corrupt DB", e); }
-
+// --- CORE FUNCTIONS ---
 function loadConf() {
   const c = localStorage.getItem(CONF_KEY);
   return c ? { ...DEFAULT_CONF, ...JSON.parse(c) } : DEFAULT_CONF;
@@ -428,267 +330,266 @@ function loadConf() {
 
 function save() {
   localStorage.setItem(DB_KEY, JSON.stringify(state.items));
-  sync();
   render();
 }
 
 function saveConf() {
   localStorage.setItem(CONF_KEY, JSON.stringify(state.conf));
-  renderAccountSelector();
-  toast("Configuration Saved");
+  renderHeader();
+  toast("Settings Saved");
 }
 
-// --- CLOUD SYNC ---
-function sync() {
-  if (!state.conf.cloudUrl) return;
-  const dot = document.getElementById('sync-dot');
-  const msg = document.getElementById('sync-msg');
-  
-  dot.className = 'status-dot syncing';
-  msg.innerText = 'Syncing...';
+try {
+  const saved = localStorage.getItem(DB_KEY);
+  if(saved) state.items = JSON.parse(saved);
+} catch(e) { console.error(e); }
 
-  const payload = {
-    key: state.conf.apiKey, 
-    items: state.items,
-    timestamp: Date.now()
-  };
-
-  fetch(state.conf.cloudUrl, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  .then(() => {
-    dot.className = 'status-dot active';
-    msg.innerText = 'Synced';
-    setTimeout(() => { msg.innerText = 'Cloud'; }, 2000);
-  })
-  .catch(e => {
-    dot.className = 'status-dot error';
-    msg.innerText = 'Error';
-    console.error(e);
-  });
-}
-
-// --- DOM ---
-const dom = {
-  captureText: document.getElementById('capture-text'),
-  accountList: document.getElementById('account-list'),
-  categoryList: document.getElementById('category-list'),
-  reviewStack: document.getElementById('review-stack'),
-  retrieveStack: document.getElementById('retrieve-stack'),
-  reviewCount: document.getElementById('review-count'),
-  navBadge: document.getElementById('nav-badge'),
-  searchInput: document.getElementById('search-input'),
-  confAccounts: document.getElementById('conf-accounts'),
-  confUrl: document.getElementById('conf-url'),
-  confKey: document.getElementById('conf-key')
-};
-
-// --- LOGIC ---
-let currentAccount = null; 
-let currentCategory = null; 
-
-function init() {
-  dom.confAccounts.value = state.conf.accountsStr;
-  dom.confUrl.value = state.conf.cloudUrl;
-  dom.confKey.value = state.conf.apiKey;
-  renderAccountSelector();
-  render();
-}
-
-function renderAccountSelector() {
-  const accounts = getParsedAccounts();
-  if (!currentAccount && accounts.length > 0) currentAccount = accounts[0].name;
-
-  dom.accountList.innerHTML = accounts.map(acc => {
-    const isSelected = acc.name === currentAccount;
-    const style = isSelected ? `border-color:${acc.color}; color:${acc.color};` : '';
+// --- UI RENDERING ---
+function renderHeader() {
+  const container = document.getElementById('account-pills');
+  container.innerHTML = state.conf.accounts.map(acc => {
+    const isActive = ui.activeAccount === acc.name;
+    const style = isActive ? `border-color:${acc.color}; color:${acc.color};` : '';
     return `
-      <button class="account-btn ${isSelected ? 'selected' : ''}" 
-              style="${style}"
-              onclick="selectAccount('${acc.name}')">
+      <button class="account-pill ${isActive?'active':''}" style="${style}" onclick="setAccount('${acc.name}')">
         <div class="account-dot" style="background:${acc.color}"></div>
         ${acc.name}
-      </button>
-    `;
+      </button>`;
   }).join('');
 }
 
-window.selectAccount = (accName) => {
-  currentAccount = accName;
-  renderAccountSelector();
-  // Don't auto-focus on mobile to prevent keyboard jumpiness
+window.setAccount = (name) => {
+  ui.activeAccount = name;
+  renderHeader();
+  render(); // Refilter lists
 };
 
-dom.categoryList.addEventListener('click', (e) => {
-  if(e.target.classList.contains('type-pill')) {
-    if (e.target.classList.contains('selected')) {
-      e.target.classList.remove('selected');
-      currentCategory = null; 
-    } else {
-      document.querySelectorAll('.type-pill').forEach(b => b.classList.remove('selected'));
-      e.target.classList.add('selected');
-      currentCategory = e.target.dataset.val;
-    }
-  }
-});
-
-function capture() {
-  const text = dom.captureText.value.trim();
-  if(!text) return;
-
-  const accounts = getParsedAccounts();
-  const accObj = accounts.find(a => a.name === currentAccount) || accounts[0];
-  const status = currentCategory ? 'stored' : 'inbox';
-
-  const item = {
-    id: Date.now().toString(36),
-    text: text,
-    account: currentAccount,
-    accountColor: accObj ? accObj.color : '#999',
-    category: currentCategory || 'Unsorted',
-    status: status,
-    created: Date.now()
-  };
-
-  state.items.unshift(item);
-  dom.captureText.value = '';
-  
-  document.querySelectorAll('.type-pill').forEach(b => b.classList.remove('selected'));
-  currentCategory = null;
-  
-  save();
-  toast(status === 'stored' ? "Logged to DB" : "Logged to Inbox");
-}
-
-document.getElementById('btn-capture').addEventListener('click', capture);
-dom.captureText.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-    e.preventDefault();
-    capture();
-  }
-});
-
 function render() {
-  // Review View (Inbox)
-  const inbox = state.items.filter(i => i.status === 'inbox');
-  dom.reviewCount.innerText = `${inbox.length} unprocessed`;
-  dom.navBadge.innerText = inbox.length > 0 ? `(${inbox.length})` : '';
+  // Inbox (Review)
+  let inbox = state.items.filter(i => i.status === 'inbox' && !i._deleted);
+  // Filter Inbox by Account if in Review mode? Let's say yes for consistency.
+  if(ui.currentView !== 'capture') {
+    inbox = inbox.filter(i => i.account === ui.activeAccount);
+  }
   
-  if (inbox.length === 0) {
-    dom.reviewStack.innerHTML = `<div class="empty-state">Inbox Zero.</div>`;
-  } else {
-    dom.reviewStack.innerHTML = inbox.map(i => renderCard(i, true)).join('');
-  }
+  document.getElementById('review-count').innerText = `${inbox.length} items`;
+  document.getElementById('nav-badge').innerText = inbox.length > 0 ? `(${inbox.length})` : '';
+  
+  const reviewHtml = inbox.length ? inbox.map(i => renderCard(i, true)).join('') : '<div class="empty-state">Inbox Clear</div>';
+  document.getElementById('review-stack').innerHTML = reviewHtml;
 
-  // Retrieve View
-  const query = dom.searchInput.value.toLowerCase();
-  let db;
-  if (query) {
-    db = state.items.filter(i => 
-      i.text.toLowerCase().includes(query) || 
-      i.account.toLowerCase().includes(query) ||
-      i.category.toLowerCase().includes(query)
-    );
-  } else {
-    db = state.items.filter(i => i.status !== 'inbox').slice(0, 50);
-  }
+  // Retrieve (Database)
+  const q = document.getElementById('search-input').value.toLowerCase();
+  let db = state.items.filter(i => i.status !== 'inbox' && !i._deleted);
+  
+  // Filter by Account (unless searching globally? No, keep context)
+  db = db.filter(i => i.account === ui.activeAccount);
 
-  dom.retrieveStack.innerHTML = db.length ? db.map(i => renderCard(i, false)).join('') : `<div class="empty-state">No records found.</div>`;
+  if(q) db = db.filter(i => i.text.toLowerCase().includes(q));
+  
+  const retrieveHtml = db.length ? db.slice(0,50).map(i => renderCard(i, false)).join('') : '<div class="empty-state">No records found</div>';
+  document.getElementById('retrieve-stack').innerHTML = retrieveHtml;
 }
 
 function renderCard(item, isReview) {
+  const acc = state.conf.accounts.find(a => a.name === item.account) || {color:'#ccc'};
   const date = new Date(item.created).toLocaleDateString(undefined, {month:'short', day:'numeric'});
   
-  let actions = '';
-  if (isReview) {
-    actions = `
-      <button class="action-btn" onclick="setStatus('${item.id}', 'stored')">File</button>
-      <button class="action-btn" onclick="deleteItem('${item.id}')">Delete</button>
-    `;
-  } else {
-    actions = `
-      <button class="action-btn" onclick="deleteItem('${item.id}')">Delete</button>
-      <button class="action-btn" onclick="setStatus('${item.id}', 'inbox')">To Inbox</button>
-    `;
-  }
+  let btns = isReview 
+    ? `<button class="action-btn" onclick="setStatus('${item.id}','stored')">File</button>
+       <button class="action-btn" onclick="delItem('${item.id}')">Delete</button>`
+    : `<button class="action-btn" onclick="delItem('${item.id}')">Trash</button>`;
 
   return `
-    <div class="card" style="border-left-color: ${item.accountColor || '#ccc'}">
+    <div class="card" style="border-left-color:${acc.color}">
       <div class="card-meta">
-        <span class="account" style="color:${item.accountColor || '#666'}">${item.account}</span>
+        <span style="color:${acc.color}">${item.account}</span>
         <span>${item.category} • ${date}</span>
       </div>
-      <div class="card-body">${escapeHtml(item.text)}</div>
-      <div class="card-actions">
-        ${actions}
-      </div>
-    </div>
-  `;
+      <div class="card-body">${escape(item.text)}</div>
+      <div class="card-actions">${btns}</div>
+    </div>`;
 }
 
-window.setStatus = (id, status) => {
-  const i = state.items.find(x => x.id === id);
-  if (i) { i.status = status; save(); render(); }
+// --- ACTIONS ---
+function capture() {
+  const text = document.getElementById('capture-text').value.trim();
+  if(!text) return;
+  
+  const acc = state.conf.accounts.find(a => a.name === ui.activeAccount) || state.conf.accounts[0];
+  const status = ui.category ? 'stored' : 'inbox';
+  
+  state.items.unshift({
+    id: Date.now().toString(36),
+    text: text,
+    account: acc.name,
+    category: ui.category || 'Unsorted',
+    status: status,
+    created: Date.now(),
+    _deleted: false
+  });
+  
+  document.getElementById('capture-text').value = '';
+  document.querySelectorAll('.type-pill').forEach(b => b.classList.remove('selected'));
+  ui.category = null;
+  save();
+  toast(status === 'stored' ? "Logged to DB" : "Logged to Inbox");
+  sync();
+}
+
+// Button Events
+document.getElementById('btn-capture').onclick = capture;
+document.getElementById('capture-text').onkeydown = (e) => {
+  if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); capture(); }
 };
 
-window.deleteItem = (id) => {
-  if(confirm('Delete record?')) {
-    state.items = state.items.filter(x => x.id !== id);
-    save();
-    render();
+document.getElementById('category-list').onclick = (e) => {
+  if(e.target.classList.contains('type-pill')) {
+    if(e.target.classList.contains('selected')) {
+      e.target.classList.remove('selected'); ui.category = null;
+    } else {
+      document.querySelectorAll('.type-pill').forEach(b => b.classList.remove('selected'));
+      e.target.classList.add('selected'); ui.category = e.target.dataset.val;
+    }
   }
 };
 
-// NAV HANDLING
+window.setStatus = (id, s) => { 
+  const i = state.items.find(x => x.id === id); 
+  if(i) { i.status = s; save(); } 
+};
+window.delItem = (id) => { 
+  const i = state.items.find(x => x.id === id); 
+  if(i) { i._deleted = true; save(); } 
+};
+
+// --- DATA TOOLS ---
+document.getElementById('btn-export').onclick = () => {
+  const a = document.createElement('a');
+  a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+  a.download = `trigpoint_backup_${Date.now()}.json`;
+  a.click();
+};
+
+document.getElementById('btn-import').onclick = () => document.getElementById('import-file').click();
+document.getElementById('import-file').onchange = (e) => {
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const d = JSON.parse(fr.result);
+      if(d.items && d.conf) {
+        state = d; save(); saveConf(); toast("Restored"); renderHeader();
+      }
+    } catch(err) { alert("Invalid File"); }
+  };
+  fr.readAsText(e.target.files[0]);
+};
+
+// Modal Logic for Trash/Reset
+let confirmCallback = null;
+const modalConfirm = document.getElementById('confirm-modal');
+
+function confirmAction(title, msg, cb) {
+  document.getElementById('confirm-title').innerText = title;
+  document.getElementById('confirm-msg').innerText = msg;
+  confirmCallback = cb;
+  modalConfirm.classList.add('open');
+}
+
+document.getElementById('confirm-cancel').onclick = () => modalConfirm.classList.remove('open');
+document.getElementById('confirm-ok').onclick = () => {
+  if(confirmCallback) confirmCallback();
+  modalConfirm.classList.remove('open');
+};
+
+document.getElementById('btn-empty-trash').onclick = () => {
+  confirmAction("Empty Trash?", "Permanently remove deleted items.", () => {
+    state.items = state.items.filter(i => !i._deleted);
+    save(); toast("Trash Emptied");
+  });
+};
+
+document.getElementById('btn-reset').onclick = () => {
+  confirmAction("Reset App?", "Delete ALL data. Cannot be undone.", () => {
+    state.items = []; save(); location.reload();
+  });
+};
+
+// --- SETTINGS MODAL ---
+const setModal = document.getElementById('settings-modal');
+document.getElementById('open-settings').onclick = () => {
+  document.getElementById('conf-url').value = state.conf.cloudUrl;
+  document.getElementById('conf-key').value = state.conf.apiKey;
+  renderSettingsAccounts();
+  setModal.classList.add('open');
+};
+document.getElementById('close-settings').onclick = () => setModal.classList.remove('open');
+
+function renderSettingsAccounts() {
+  const list = document.getElementById('settings-account-list');
+  list.innerHTML = state.conf.accounts.map((acc, idx) => `
+    <div class="account-list-item">
+      <span style="color:${acc.color}; font-weight:bold;">${acc.name}</span>
+      <span class="rm-btn" onclick="removeAccount(${idx})">×</span>
+    </div>
+  `).join('');
+}
+
+window.removeAccount = (idx) => {
+  state.conf.accounts.splice(idx, 1);
+  renderSettingsAccounts();
+};
+
+document.getElementById('btn-add-acc').onclick = () => {
+  const name = document.getElementById('new-acc-name').value.trim();
+  const color = document.getElementById('new-acc-color').value;
+  if(name) {
+    state.conf.accounts.push({name, color});
+    document.getElementById('new-acc-name').value = '';
+    renderSettingsAccounts();
+  }
+};
+
+document.getElementById('save-settings').onclick = () => {
+  state.conf.cloudUrl = document.getElementById('conf-url').value.trim();
+  state.conf.apiKey = document.getElementById('conf-key').value.trim();
+  saveConf();
+  setModal.classList.remove('open');
+};
+
+// --- SYNC ---
+function sync() {
+  if(!state.conf.cloudUrl) return;
+  fetch(state.conf.cloudUrl, {
+    method: 'POST', mode: 'no-cors',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ key: state.conf.apiKey, items: state.items })
+  }).catch(console.error);
+}
+document.getElementById('btn-sync-now').onclick = () => { toast("Syncing..."); sync(); };
+
+// --- SEARCH & NAV ---
+document.getElementById('search-input').oninput = render;
 document.querySelectorAll('.nav-item').forEach(btn => {
-  btn.addEventListener('click', () => {
+  btn.onclick = () => {
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
-    
     btn.classList.add('active');
-    document.getElementById(`view-${btn.dataset.target}`).classList.add('active');
-    
-    window.scrollTo(0, 0); // Reset scroll on view change
+    ui.currentView = btn.dataset.target;
+    document.getElementById(`view-${ui.currentView}`).classList.add('active');
     render();
-  });
+  };
 });
 
-document.getElementById('btn-save-conf').addEventListener('click', () => {
-  state.conf.accountsStr = dom.confAccounts.value;
-  state.conf.cloudUrl = dom.confUrl.value.trim();
-  state.conf.apiKey = dom.confKey.value.trim();
-  saveConf();
-  init(); 
-});
-
-document.getElementById('btn-export').addEventListener('click', () => {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
-  const el = document.createElement('a');
-  el.setAttribute("href", dataStr);
-  el.setAttribute("download", "trigpoint_backup.json");
-  document.body.appendChild(el);
-  el.click();
-  el.remove();
-});
-
-dom.searchInput.addEventListener('input', render);
-
-function escapeHtml(text) {
-  if (!text) return text;
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+function escape(s) { return s ? s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`) : ''; }
+function toast(m) {
+  const t = document.getElementById('toast'); t.innerText = m; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2000);
 }
 
-function toast(msg) {
-  const t = document.getElementById('toast');
-  document.getElementById('toast-msg').innerText = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2000);
-}
-
-init();
+// INIT
+renderHeader();
+render();
 
 </script>
 </body>
