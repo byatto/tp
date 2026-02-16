@@ -46,7 +46,8 @@
     background-color: var(--bg-canvas);
     color: var(--text-main);
     font-family: var(--font-ui);
-    height: 100vh;
+    min-height: 100vh;      /* Fallback for old browsers */
+    height: 100dvh;         /* The real visible height on mobile */
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -115,7 +116,9 @@
     overflow-y: auto;
     position: relative;
     scroll-behavior: smooth;
-  }
+    height: 0; /* Crucial: forces flex calculation to respect the parent height */
+    min-height: 0; /* Crucial for Firefox/Edge */
+    }
 
   .view-section { display: none; padding: 20px; padding-bottom: 100px; animation: fadeIn 0.2s ease; }
   .view-section.active { display: block; }
@@ -222,6 +225,8 @@
   .nav-bar {
     background: var(--bg-panel); border-top: 1px solid var(--border-color);
     display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 0;
+    flex-shrink: 0; /* Prevents squashing */
+  padding-bottom: env(safe-area-inset-bottom); /* Adds space for gesture bars */
   }
   .nav-item {
     background: transparent; border: none; padding: 16px 0;
