@@ -616,19 +616,71 @@ function scheduleSync() {
   syncTimeout = setTimeout(() => pushToCloud(), 1500);
 }
 
+// Debug mode - set to true to see detailed sync logs
+const DEBUG_SYNC = true;
+
+function debugLog(msg, data) {
+  if (!DEBUG_SYNC) return;
+  console.log('[TrigPoint Debug]', msg, data || '');
+  // Also show in UI for mobile debugging
+  if (DEBUG_SYNC && data && typeof data === 'object') {
+    console.log('[TrigPoint Debug] Data:', JSON.stringify(data).slice(0, 500));
+  }
+}
+
+function showDebugToast(msg) {
+  if (!DEBUG_SYNC) return;
+  const existing = document.getElementById('debug-toast');
+  if (existing) existing.remove();
+  
+  const div = document.createElement('div');
+  div.id = 'debug-toast';
+  div.style.cssText = 'position:fixed;top:10px;left:10px;right:10px;background:#333;color:#fff;padding:12px;border-radius:8px;font-size:12px;z-index:9999;font-family:monospace;white-space:pre-wrap;max-height:40vh;overflow:auto;';
+  div.textContent = msg;
+  div.onclick = () => div.remove();
+  document.body.appendChild(div);
+}
+
 async function pullFromCloud() {
   if (!cloudUrl || isSyncing) return;
   isSyncing = true;
   setSyncStatus('syncing');
   
+  debugLog('Starting pull sync');
+  debugLog('Cloud URL length:', cloudUrl.length);
+  debugLog('API Key length:', cloudKey.length);
+  debugLog('URL starts with:', cloudUrl.slice(0, 50));
+  
   try {
     const url = cloudUrl + (cloudUrl.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(cloudKey);
+    debugLog('Full request URL length:', url.length);
+    
+    showDebugToast('Fetching from cloud...\nURL: ' + cloudUrl.slice(0, 40) + '...');
+    
     const res = await fetch(url, { method: 'GET', redirect: 'follow' });
-    const cloud = await res.json();
+    debugLog('Response status:', res.status);
+    debugLog('Response ok:', res.ok);
+    
+    const text = await res.text();
+    debugLog('Response length:', text.length);
+    debugLog('Response preview:', text.slice(0, 200));
+    
+    let cloud;
+    try {
+      cloud = JSON.parse(text);
+    } catch (parseErr) {
+      showDebugToast('JSON Parse Error!\n\nResponse was:\n' + text.slice(0, 300));
+      throw new Error('Invalid JSON response: ' + text.slice(0, 100));
+    }
+    
+    debugLog('Parsed response:', { success: cloud.success, itemCount: cloud.items?.length, error: cloud.error });
     
     if (!cloud.success) {
+      showDebugToast('Sync failed!\n\nServer said: ' + (cloud.error || 'Unknown error'));
       throw new Error(cloud.error || 'Sync failed');
     }
+    
+    showDebugToast('Sync success!\n\nItems from cloud: ' + (cloud.items?.length || 0));
     
     // Merge items: last-write-wins
     const cloudMap = new Map((cloud.items || []).map(i => [i.id, i]));
@@ -687,6 +739,8 @@ async function pullFromCloud() {
 async function pushToCloud() {
   if (!cloudUrl || isSyncing) return;
   
+  debugLog('Starting push sync');
+  
   try {
     setSyncStatus('syncing');
     
@@ -697,18 +751,34 @@ async function pushToCloud() {
       categories: data.categories
     };
     
+    debugLog('Push payload size:', JSON.stringify(payload).length);
+    debugLog('Items to push:', payload.items.length);
+    
     const res = await fetch(cloudUrl, {
       method: 'POST',
       redirect: 'follow',
       body: JSON.stringify(payload)
     });
     
-    const result = await res.json();
+    debugLog('Push response status:', res.status);
+    
+    const text = await res.text();
+    debugLog('Push response:', text.slice(0, 200));
+    
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch (e) {
+      showDebugToast('Push Error!\n\nResponse:\n' + text.slice(0, 300));
+      throw new Error('Invalid JSON: ' + text.slice(0, 100));
+    }
     
     if (!result.success) {
+      showDebugToast('Push failed!\n\n' + (result.error || 'Unknown error'));
       throw new Error(result.error || 'Push failed');
     }
     
+    debugLog('Push successful');
     setSyncStatus('online');
     
   } catch (e) {
@@ -1211,17 +1281,46 @@ document.getElementById('cloud-btn').addEventListener('click', () => {
       <input type="text" class="modal-input" id="cloud-url-input" value="${esc(cloudUrl)}" placeholder="https://script.google.com/...">
       <label class="modal-label">API Key</label>
       <input type="password" class="modal-input" id="cloud-key-input" value="${esc(cloudKey)}" placeholder="Your API key">
+      <div style="margin-top:12px;padding:10px;background:var(--bg-hover);border-radius:6px;font-size:11px;font-family:monospace;color:var(--text-muted);">
+        <div>Current URL length: <span id="debug-url-len">${cloudUrl.length}</span></div>
+        <div>Current Key length: <span id="debug-key-len">${cloudKey.length}</span></div>
+      </div>
     `;
+    // Live update lengths as user types
+    setTimeout(() => {
+      const urlInput = document.getElementById('cloud-url-input');
+      const keyInput = document.getElementById('cloud-key-input');
+      urlInput.addEventListener('input', () => {
+        document.getElementById('debug-url-len').textContent = urlInput.value.trim().length;
+      });
+      keyInput.addEventListener('input', () => {
+        document.getElementById('debug-key-len').textContent = keyInput.value.trim().length;
+      });
+    }, 50);
   }, () => {
     const url = document.getElementById('cloud-url-input').value.trim();
     const key = document.getElementById('cloud-key-input').value.trim();
+    
+    debugLog('Saving cloud credentials');
+    debugLog('URL length:', url.length);
+    debugLog('Key length:', key.length);
+    debugLog('URL starts with:', url.slice(0, 30));
+    debugLog('Key starts with:', key.slice(0, 10) + '...');
+    
+    // Validate URL format
+    if (url && !url.startsWith('https://script.google.com/')) {
+      showDebugToast('Warning: URL should start with https://script.google.com/\n\nGot: ' + url.slice(0, 50));
+    }
     
     if (url) {
       localStorage.setItem(CLOUD_URL_KEY, url);
       localStorage.setItem(CLOUD_KEY_KEY, key);
       cloudUrl = url;
       cloudKey = key;
-      pullFromCloud();
+      
+      showDebugToast('Credentials saved!\n\nURL: ' + url.slice(0, 40) + '...\nKey: ' + key.slice(0, 10) + '...\n\nAttempting sync...');
+      
+      setTimeout(() => pullFromCloud(), 500);
     } else {
       localStorage.removeItem(CLOUD_URL_KEY);
       localStorage.removeItem(CLOUD_KEY_KEY);
