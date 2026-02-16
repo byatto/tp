@@ -4,12 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>TrigPoint</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#EAEAEA">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 15 L85 85 L15 85 Z' fill='none' stroke='%230033CC' stroke-width='8'/%3E%3Ccircle cx='50' cy='60' r='6' fill='%230033CC'/%3E%3C/svg%3E" type="image/svg+xml">
+
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <style>
-  /* ─── TRIGPOINT DESIGN SYSTEM v1.1 ─── */
+  /* ─── THEME VARIABLES ─── */
   :root {
-    /* Palette */
     --bg-canvas: #EAEAEA;
     --bg-surface: #F5F5F5;
     --bg-panel: #FFFFFF;
@@ -27,6 +32,10 @@
     
     --radius: 2px;
     --shadow: 0 2px 0 rgba(0,0,0,0.05);
+    
+    /* Layout Constants */
+    --nav-height: 60px;
+    --header-height: 60px;
   }
 
   [data-theme="dark"] {
@@ -42,40 +51,42 @@
 
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+  /* POCKETPIP LAYOUT ENGINE */
   body {
     background-color: var(--bg-canvas);
     color: var(--text-main);
     font-family: var(--font-ui);
-    min-height: 100vh;      /* Fallback for old browsers */
-    height: 100dvh;         /* The real visible height on mobile */
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    min-height: 100vh; /* Allow natural scrolling */
+    line-height: 1.5;
+    /* Prevent rubber-banding on iOS */
+    overscroll-behavior-y: none; 
   }
 
-  /* ─── APP SHELL ─── */
   .app-container {
     max-width: 600px;
-    width: 100%;
     margin: 0 auto;
     background: var(--bg-surface);
-    height: 100%;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
     position: relative;
     box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    /* Space for Fixed Nav */
+    padding-bottom: calc(var(--nav-height) + 20px);
   }
 
   /* ─── HEADER ─── */
   header {
-    padding: 16px 20px;
+    height: var(--header-height);
+    padding: 0 20px;
     background: var(--bg-panel);
     border-bottom: 2px solid var(--text-main);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    flex-shrink: 0;
-    z-index: 10;
+    position: sticky; /* Stick to top */
+    top: 0;
+    z-index: 100;
   }
 
   .brand {
@@ -107,37 +118,35 @@
   .status-dot.active { background: #008844; box-shadow: 0 0 8px #008844; }
   .status-dot.error { background: #CC2200; }
   .status-dot.syncing { background: #D4AF37; animation: pulse 1s infinite; }
-
   @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 
-  /* ─── VIEWPORT ─── */
+  /* ─── MAIN CONTENT ─── */
   main {
     flex: 1;
-    overflow-y: auto;
-    position: relative;
-    scroll-behavior: smooth;
-    height: 0; /* Crucial: forces flex calculation to respect the parent height */
-    min-height: 0; /* Crucial for Firefox/Edge */
-    }
+    padding: 20px;
+    /* No overflow property here - let Body handle scroll */
+  }
 
-  .view-section { display: none; padding: 20px; padding-bottom: 100px; animation: fadeIn 0.2s ease; }
+  .view-section { display: none; animation: fadeIn 0.2s ease; }
   .view-section.active { display: block; }
-
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-  /* ─── CAPTURE MODE ─── */
-  .capture-controls { display: flex; flex-direction: column; gap: 16px; height: 100%; }
+  /* ─── CAPTURE UI ─── */
+  .capture-controls { display: flex; flex-direction: column; gap: 16px; }
 
   /* Account Selector */
   .account-selector {
-    display: flex; overflow-x: auto; gap: 8px; padding-bottom: 4px;
+    display: flex; overflow-x: auto; gap: 8px; padding-bottom: 8px;
     border-bottom: 1px solid var(--border-color);
+    scrollbar-width: none; /* Hide scrollbar */
   }
+  .account-selector::-webkit-scrollbar { display: none; }
+
   .account-btn {
     background: transparent;
     border: 1px solid var(--border-color);
-    padding: 6px 12px;
-    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    padding: 8px 14px; /* Larger touch target */
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
     color: var(--text-muted); cursor: pointer; white-space: nowrap;
     border-radius: var(--radius);
     display: flex; align-items: center; gap: 6px;
@@ -147,22 +156,23 @@
   
   .account-btn.selected {
     background: var(--bg-panel);
-    border-color: currentColor; /* Inherit color from inline style */
+    border-color: currentColor; 
     color: var(--text-main);
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
   }
 
   /* Input */
-  .input-area { flex: 1; position: relative; display: flex; flex-direction: column; }
+  .input-area { width: 100%; }
   #capture-text {
-    width: 100%; flex: 1; background: var(--bg-surface); border: none;
+    width: 100%; min-height: 150px; /* Explicit height */
+    background: var(--bg-surface); border: none;
     resize: none; font-family: var(--font-data); font-size: 16px; line-height: 1.6;
-    color: var(--text-main); outline: none; padding: 0;
+    color: var(--text-main); outline: none; padding: 10px 0;
   }
   #capture-text::placeholder { color: var(--border-color); }
 
   /* Pills */
-  .type-pills { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: auto; }
+  .type-pills { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .type-pill {
     padding: 12px 0; text-align: center; background: var(--bg-panel);
     border: 1px solid var(--border-color);
@@ -170,7 +180,6 @@
     color: var(--text-muted); cursor: pointer; border-radius: var(--radius);
     transition: all 0.1s;
   }
-  .type-pill:hover { background: var(--bg-canvas); }
   .type-pill.selected {
     background: var(--signal-blue-dim); color: var(--signal-blue);
     border-color: var(--signal-blue); box-shadow: 0 0 0 1px var(--signal-blue);
@@ -178,7 +187,7 @@
 
   /* Log Button */
   .capture-btn {
-    width: 100%; padding: 14px;
+    width: 100%; padding: 16px;
     background: var(--signal-blue); color: #fff;
     border: none; cursor: pointer; border-radius: var(--radius);
     margin-top: 12px; display: flex; flex-direction: column; align-items: center;
@@ -188,7 +197,7 @@
   .btn-label { font-weight: 800; font-size: 16px; letter-spacing: 0.05em; text-transform: uppercase; }
   .btn-hint { font-size: 10px; opacity: 0.7; font-family: var(--font-data); }
 
-  /* ─── REVIEW & RETRIEVE ─── */
+  /* ─── CARDS & LISTS ─── */
   .review-header {
     display: flex; justify-content: space-between; align-items: baseline;
     margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;
@@ -200,7 +209,7 @@
   .card {
     background: var(--bg-panel);
     border: 1px solid var(--border-color);
-    border-left: 4px solid #ccc; /* Overridden inline */
+    border-left: 4px solid #ccc;
     padding: 16px; position: relative; box-shadow: var(--shadow);
   }
 
@@ -216,22 +225,31 @@
   .card-actions { display: flex; gap: 8px; justify-content: flex-end; }
   .action-btn {
     background: transparent; border: 1px solid var(--border-color);
-    padding: 4px 10px; font-size: 11px; font-weight: 600;
+    padding: 6px 12px; font-size: 11px; font-weight: 600;
     cursor: pointer; color: var(--text-muted); border-radius: var(--radius);
   }
   .action-btn:hover { border-color: var(--text-main); color: var(--text-main); }
-  
-  /* ─── NAVIGATION ─── */
+
+  /* ─── FIXED BOTTOM NAV ─── */
   .nav-bar {
-    background: var(--bg-panel); border-top: 1px solid var(--border-color);
-    display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 0;
-    flex-shrink: 0; /* Prevents squashing */
-  padding-bottom: env(safe-area-inset-bottom); /* Adds space for gesture bars */
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: var(--nav-height);
+    background: var(--bg-panel); 
+    border-top: 1px solid var(--border-color);
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    z-index: 1000;
+    padding-bottom: env(safe-area-inset-bottom); /* iOS Home Bar spacing */
+    /* Center layout constraint */
+    max-width: 600px; margin: 0 auto; 
   }
+  
   .nav-item {
-    background: transparent; border: none; padding: 16px 0;
+    background: transparent; border: none;
     font-family: var(--font-data); font-size: 12px; color: var(--text-muted);
-    cursor: pointer; text-align: center; text-transform: uppercase; position: relative;
+    cursor: pointer; text-align: center; text-transform: uppercase;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
   }
   .nav-item.active { color: var(--signal-blue); font-weight: 700; }
   .nav-item.active::after {
@@ -239,7 +257,7 @@
     width: 40%; height: 2px; background: var(--signal-blue);
   }
 
-  /* ─── SETTINGS ─── */
+  /* ─── SETTINGS & INPUTS ─── */
   .settings-panel {
     background: var(--bg-panel); border: 1px solid var(--border-color);
     padding: 20px; margin-top: 20px;
@@ -247,21 +265,22 @@
   .form-group { margin-bottom: 16px; }
   .form-label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; color: var(--text-muted); }
   .form-input { 
-    width: 100%; padding: 8px 12px; font-family: var(--font-data); font-size: 13px; 
+    width: 100%; padding: 10px; font-family: var(--font-data); font-size: 14px; 
     border: 1px solid var(--border-color); background: var(--bg-surface);
-    color: var(--text-main); outline: none;
+    color: var(--text-main); outline: none; border-radius: var(--radius);
   }
   .form-input:focus { border-color: var(--signal-blue); }
 
   .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); font-family: var(--font-data); font-size: 12px; }
 
-  /* Toast */
+  /* Toast Notification */
   .toast {
-    position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
     background: var(--text-main); color: var(--bg-panel);
-    padding: 8px 16px; font-size: 12px; font-weight: 600;
+    padding: 10px 20px; font-size: 13px; font-weight: 600;
     opacity: 0; pointer-events: none; transition: all 0.2s;
-    border-radius: var(--radius); display: flex; align-items: center; gap: 8px; z-index: 100;
+    border-radius: var(--radius); display: flex; align-items: center; gap: 8px; z-index: 2000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -336,8 +355,8 @@
         <h3>Configuration</h3>
         <br>
         <div class="form-group">
-          <label class="form-label">Accounts (Format: Name:Color, Name:Color)</label>
-          <input type="text" class="form-input" id="conf-accounts" placeholder="Personal:#000000, Work:#0033CC">
+          <label class="form-label">Accounts (Format: Name:Color)</label>
+          <input type="text" class="form-input" id="conf-accounts" placeholder="Personal:#FF9F1C, Work:#2EC4B6">
         </div>
         <div class="form-group">
           <label class="form-label">Google Script URL</label>
@@ -362,16 +381,16 @@
     <button class="nav-item" data-target="retrieve">Retrieve</button>
   </nav>
 
-  <div class="toast" id="toast">
-    <span id="toast-icon">✓</span> <span id="toast-msg">Logged</span>
-  </div>
+</div>
 
+<div class="toast" id="toast">
+  <span id="toast-icon">✓</span> <span id="toast-msg">Logged</span>
 </div>
 
 <script>
 /**
- * TRIGPOINT v1.1
- * Engineered for utility.
+ * TRIGPOINT v2.0
+ * Engine: PocketPip | Skin: Surveyor
  */
 
 // --- STATE MANAGEMENT ---
@@ -379,7 +398,6 @@ const DB_KEY = 'trigpoint_db';
 const CONF_KEY = 'trigpoint_conf';
 
 const DEFAULT_CONF = {
-  // Storing as string to make editing easier in the simple text field
   accountsStr: "Personal:#FF9F1C, Work:#2EC4B6", 
   cloudUrl: "",
   apiKey: ""
@@ -390,19 +408,14 @@ let state = {
   conf: loadConf()
 };
 
-// Account parsing logic
 function getParsedAccounts() {
   const raw = state.conf.accountsStr || "Personal:#999";
   return raw.split(',').map(s => {
     const [name, color] = s.split(':');
-    return { 
-      name: name.trim(), 
-      color: color ? color.trim() : '#666' 
-    };
+    return { name: name.trim(), color: color ? color.trim() : '#666' };
   }).filter(a => a.name);
 }
 
-// Load Data
 try {
   const saved = localStorage.getItem(DB_KEY);
   if (saved) state.items = JSON.parse(saved);
@@ -474,8 +487,8 @@ const dom = {
 };
 
 // --- LOGIC ---
-let currentAccount = null; // Will set to first available
-let currentCategory = null; // Null means "Unsorted/Inbox"
+let currentAccount = null; 
+let currentCategory = null; 
 
 function init() {
   dom.confAccounts.value = state.conf.accountsStr;
@@ -491,7 +504,6 @@ function renderAccountSelector() {
 
   dom.accountList.innerHTML = accounts.map(acc => {
     const isSelected = acc.name === currentAccount;
-    // We use inline border color so the dynamic color works
     const style = isSelected ? `border-color:${acc.color}; color:${acc.color};` : '';
     return `
       <button class="account-btn ${isSelected ? 'selected' : ''}" 
@@ -507,36 +519,28 @@ function renderAccountSelector() {
 window.selectAccount = (accName) => {
   currentAccount = accName;
   renderAccountSelector();
-  dom.captureText.focus();
+  // Don't auto-focus on mobile to prevent keyboard jumpiness
 };
 
-// Handle Category Pills
 dom.categoryList.addEventListener('click', (e) => {
   if(e.target.classList.contains('type-pill')) {
-    // Toggle logic
     if (e.target.classList.contains('selected')) {
       e.target.classList.remove('selected');
-      currentCategory = null; // Back to Inbox
+      currentCategory = null; 
     } else {
       document.querySelectorAll('.type-pill').forEach(b => b.classList.remove('selected'));
       e.target.classList.add('selected');
       currentCategory = e.target.dataset.val;
     }
-    dom.captureText.focus();
   }
 });
 
-// Capture Action
 function capture() {
   const text = dom.captureText.value.trim();
   if(!text) return;
 
   const accounts = getParsedAccounts();
-  // Find color for current account
   const accObj = accounts.find(a => a.name === currentAccount) || accounts[0];
-
-  // LOGIC: If category is selected, status is 'stored' (Database).
-  // If NO category selected, status is 'inbox' (Review).
   const status = currentCategory ? 'stored' : 'inbox';
 
   const item = {
@@ -552,7 +556,6 @@ function capture() {
   state.items.unshift(item);
   dom.captureText.value = '';
   
-  // Visual reset
   document.querySelectorAll('.type-pill').forEach(b => b.classList.remove('selected'));
   currentCategory = null;
   
@@ -568,9 +571,8 @@ dom.captureText.addEventListener('keydown', (e) => {
   }
 });
 
-// Rendering Lists
 function render() {
-  // Review View (Inbox Only)
+  // Review View (Inbox)
   const inbox = state.items.filter(i => i.status === 'inbox');
   dom.reviewCount.innerText = `${inbox.length} unprocessed`;
   dom.navBadge.innerText = inbox.length > 0 ? `(${inbox.length})` : '';
@@ -581,10 +583,8 @@ function render() {
     dom.reviewStack.innerHTML = inbox.map(i => renderCard(i, true)).join('');
   }
 
-  // Retrieve View (Stored items OR searched items)
-  // If searching, we show everything regardless of status.
+  // Retrieve View
   const query = dom.searchInput.value.toLowerCase();
-  
   let db;
   if (query) {
     db = state.items.filter(i => 
@@ -593,9 +593,7 @@ function render() {
       i.category.toLowerCase().includes(query)
     );
   } else {
-    // Default: Show non-inbox items (Stored items)
-    db = state.items.filter(i => i.status !== 'inbox');
-    db = db.slice(0, 50); // Limit
+    db = state.items.filter(i => i.status !== 'inbox').slice(0, 50);
   }
 
   dom.retrieveStack.innerHTML = db.length ? db.map(i => renderCard(i, false)).join('') : `<div class="empty-state">No records found.</div>`;
@@ -606,13 +604,11 @@ function renderCard(item, isReview) {
   
   let actions = '';
   if (isReview) {
-    // Review: Either Delete or File it (move to stored)
     actions = `
       <button class="action-btn" onclick="setStatus('${item.id}', 'stored')">File</button>
       <button class="action-btn" onclick="deleteItem('${item.id}')">Delete</button>
     `;
   } else {
-    // Retrieve: Delete or move back to inbox
     actions = `
       <button class="action-btn" onclick="deleteItem('${item.id}')">Delete</button>
       <button class="action-btn" onclick="setStatus('${item.id}', 'inbox')">To Inbox</button>
@@ -633,14 +629,9 @@ function renderCard(item, isReview) {
   `;
 }
 
-// Item Actions
 window.setStatus = (id, status) => {
   const i = state.items.find(x => x.id === id);
-  if (i) { 
-    i.status = status; 
-    save(); 
-    render(); 
-  }
+  if (i) { i.status = status; save(); render(); }
 };
 
 window.deleteItem = (id) => {
@@ -651,7 +642,7 @@ window.deleteItem = (id) => {
   }
 };
 
-// Navigation
+// NAV HANDLING
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
@@ -660,18 +651,17 @@ document.querySelectorAll('.nav-item').forEach(btn => {
     btn.classList.add('active');
     document.getElementById(`view-${btn.dataset.target}`).classList.add('active');
     
-    if (btn.dataset.target === 'capture') dom.captureText.focus();
+    window.scrollTo(0, 0); // Reset scroll on view change
     render();
   });
 });
 
-// Config Logic
 document.getElementById('btn-save-conf').addEventListener('click', () => {
   state.conf.accountsStr = dom.confAccounts.value;
   state.conf.cloudUrl = dom.confUrl.value.trim();
   state.conf.apiKey = dom.confKey.value.trim();
   saveConf();
-  init(); // Reload UI with new settings
+  init(); 
 });
 
 document.getElementById('btn-export').addEventListener('click', () => {
@@ -686,7 +676,6 @@ document.getElementById('btn-export').addEventListener('click', () => {
 
 dom.searchInput.addEventListener('input', render);
 
-// Utils
 function escapeHtml(text) {
   if (!text) return text;
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -699,7 +688,6 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-// Start
 init();
 
 </script>
