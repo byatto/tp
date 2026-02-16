@@ -23,17 +23,20 @@
     --bg-canvas: #111111; --bg-surface: #1A1A1A; --bg-panel: #222222;
     --text-main: #EEEEEE; --text-muted: #888888; --border-color: #333333;
     --signal-blue: #3366FF; --signal-blue-dim: #111A33;
+    --shadow: 0 2px 4px rgba(0,0,0,0.3);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   
   body {
     background-color: var(--bg-canvas); color: var(--text-main); font-family: var(--font-ui);
     min-height: 100vh; line-height: 1.5; overscroll-behavior-y: none;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
   .app-container {
     max-width: 600px; margin: 0 auto; background: var(--bg-surface); min-height: 100vh;
     display: flex; flex-direction: column; position: relative;
     padding-bottom: calc(var(--nav-height) + 20px);
+    transition: background-color 0.3s ease;
   }
 
   /* ─── HEADER & ACCOUNT PILLS ─── */
@@ -41,6 +44,7 @@
     background: var(--bg-panel); border-bottom: 1px solid var(--border-color);
     padding: 10px 16px; position: sticky; top: 0; z-index: 100;
     display: flex; flex-direction: column; gap: 10px;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
   }
   .header-top { display: flex; justify-content: space-between; align-items: center; }
   .brand { font-weight: 800; font-size: 16px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
@@ -48,7 +52,9 @@
     width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent;
     border-bottom: 10px solid var(--signal-blue); position: relative;
   }
-  .settings-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted); }
+  .header-actions { display: flex; gap: 15px; align-items: center; }
+  .icon-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-muted); padding: 0; display: flex; align-items: center; }
+  .icon-btn:hover { color: var(--text-main); }
 
   /* Account Scroll Bar */
   .account-scroll {
@@ -80,6 +86,7 @@
     width: 100%; min-height: 180px; padding: 16px;
     background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: var(--radius);
     font-family: var(--font-data); font-size: 16px; color: var(--text-main); outline: none; resize: none;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
   }
   #capture-text:focus { border-color: var(--signal-blue); box-shadow: 0 0 0 1px var(--signal-blue-dim); }
   
@@ -88,6 +95,7 @@
     padding: 10px 0; text-align: center; background: var(--bg-panel);
     border: 1px solid var(--border-color); border-radius: var(--radius);
     font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer;
+    transition: background-color 0.3s ease;
   }
   .type-pill.selected {
     background: var(--signal-blue-dim); color: var(--signal-blue); border-color: var(--signal-blue);
@@ -106,7 +114,7 @@
   .card {
     background: var(--bg-panel); border: 1px solid var(--border-color);
     border-left-width: 4px; padding: 14px; border-radius: var(--radius);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow); transition: background-color 0.3s ease, border-color 0.3s ease;
   }
   .card-meta {
     display: flex; justify-content: space-between; font-family: var(--font-data);
@@ -139,6 +147,7 @@
     background: var(--bg-panel); border-top: 1px solid var(--border-color);
     display: grid; grid-template-columns: 1fr 1fr 1fr; z-index: 900;
     max-width: 600px; margin: 0 auto; padding-bottom: env(safe-area-inset-bottom);
+    transition: background-color 0.3s ease;
   }
   .nav-item {
     background: none; border: none; font-family: var(--font-data); font-size: 11px;
@@ -155,6 +164,7 @@
   .modal {
     background: var(--bg-panel); width: 100%; max-width: 400px;
     border-radius: 8px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    border: 1px solid var(--border-color);
   }
   .modal h3 { font-size: 16px; margin-bottom: 16px; text-transform: uppercase; }
   .modal-section { margin-bottom: 20px; }
@@ -162,12 +172,13 @@
   .modal-input {
     width: 100%; padding: 10px; border: 1px solid var(--border-color);
     border-radius: var(--radius); font-size: 14px; outline: none; background: var(--bg-surface);
+    color: var(--text-main);
   }
   .modal-row { display: flex; gap: 8px; margin-bottom: 8px; }
-  .color-input { width: 40px; padding: 2px; height: 38px; cursor: pointer; border: 1px solid var(--border-color); }
+  .color-input { width: 40px; padding: 2px; height: 38px; cursor: pointer; border: 1px solid var(--border-color); background: var(--bg-surface); }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
   .modal-btn {
-    padding: 8px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-color); background: none;
+    padding: 8px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-color); background: none; color: var(--text-muted);
   }
   .modal-btn.primary { background: var(--signal-blue); color: white; border-color: var(--signal-blue); }
   .modal-btn.danger { background: var(--danger); color: white; border-color: var(--danger); }
@@ -190,7 +201,7 @@
   .empty-state { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }
 </style>
 </head>
-<body>
+<body data-theme="light">
 
 <div class="app-container">
   
@@ -200,7 +211,10 @@
         <div class="brand-mark"></div>
         <span>TrigPoint</span>
       </div>
-      <button class="settings-btn" id="open-settings" title="Settings">⚙</button>
+      <div class="header-actions">
+        <button class="icon-btn" id="theme-toggle" title="Toggle Theme">&#9788;</button>
+        <button class="icon-btn" id="open-settings" title="Settings">⚙</button>
+      </div>
     </div>
     <div class="account-scroll" id="account-pills">
       </div>
@@ -209,7 +223,7 @@
   <main>
     <section id="view-capture" class="view-section active">
       <div class="capture-controls">
-        <textarea id="capture-text" placeholder="Log datum..."></textarea>
+        <textarea id="capture-text" placeholder="Input stream..."></textarea>
         
         <div class="type-pills" id="category-list">
           <button class="type-pill" data-val="Note">Note</button>
@@ -219,7 +233,7 @@
         </div>
 
         <button class="capture-btn" id="btn-capture">
-          <span class="btn-label">LOG POINT</span>
+          <span class="btn-label">LOG</span>
           <span class="btn-hint">Ctrl + Enter</span>
         </button>
       </div>
@@ -302,13 +316,14 @@
 <input type="file" id="import-file" accept=".json" style="display:none">
 
 <script>
-/** * TRIGPOINT v3.0
- * Integrated Account Filters & Safeguards
+/** * TRIGPOINT v3.1
+ * Dark Mode & Refinements
  */
 
 // --- CONFIG ---
 const DB_KEY = 'trigpoint_db_v2';
 const CONF_KEY = 'trigpoint_conf_v2';
+const THEME_KEY = 'trigpoint_theme';
 
 const DEFAULT_CONF = {
   accounts: [{name: "Personal", color: "#FF9F1C"}, {name: "Work", color: "#2EC4B6"}],
@@ -344,6 +359,22 @@ try {
   if(saved) state.items = JSON.parse(saved);
 } catch(e) { console.error(e); }
 
+// --- THEME ENGINE ---
+const themeToggle = document.getElementById('theme-toggle');
+let currentTheme = localStorage.getItem(THEME_KEY) || 'light';
+applyTheme(currentTheme);
+
+function applyTheme(t) {
+  currentTheme = t;
+  document.body.setAttribute('data-theme', t);
+  themeToggle.innerHTML = t === 'dark' ? '&#9790;' : '&#9788;'; // Moon or Sun
+  localStorage.setItem(THEME_KEY, t);
+}
+
+themeToggle.onclick = () => {
+  applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+};
+
 // --- UI RENDERING ---
 function renderHeader() {
   const container = document.getElementById('account-pills');
@@ -367,7 +398,6 @@ window.setAccount = (name) => {
 function render() {
   // Inbox (Review)
   let inbox = state.items.filter(i => i.status === 'inbox' && !i._deleted);
-  // Filter Inbox by Account if in Review mode? Let's say yes for consistency.
   if(ui.currentView !== 'capture') {
     inbox = inbox.filter(i => i.account === ui.activeAccount);
   }
@@ -382,9 +412,7 @@ function render() {
   const q = document.getElementById('search-input').value.toLowerCase();
   let db = state.items.filter(i => i.status !== 'inbox' && !i._deleted);
   
-  // Filter by Account (unless searching globally? No, keep context)
   db = db.filter(i => i.account === ui.activeAccount);
-
   if(q) db = db.filter(i => i.text.toLowerCase().includes(q));
   
   const retrieveHtml = db.length ? db.slice(0,50).map(i => renderCard(i, false)).join('') : '<div class="empty-state">No records found</div>';
