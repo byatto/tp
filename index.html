@@ -511,6 +511,24 @@ main { padding: 16px 0; min-height: 60vh; }
   width: 32px; height: 32px; border-radius: 50%; pointer-events: none;
 }
 
+/* ═══ URGENT FLAG ═══ */
+.card.urgent { border-left: 3px solid var(--danger); }
+.urgent-section-label {
+  font-size: 11px; font-weight: 700; color: var(--danger);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 4px 0 8px; display: flex; align-items: center; gap: 6px;
+  border-bottom: 1px solid var(--danger-bg); margin-bottom: 10px;
+}
+.urgent-section-label::before {
+  content: ''; display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--danger); flex: 0 0 auto;
+}
+
+/* Urgent icon on review/retrieve cards */
+.action-btn.urgent-btn { transition: all var(--transition); }
+.action-btn.urgent-btn.active { color: var(--danger); background: var(--danger-bg); }
+.action-btn.urgent-btn:hover { color: var(--danger); background: var(--danger-bg); }
+
 /* ═══ RESPONSIVE ═══ */
 @media (max-width: 600px) {
   nav.desktop-nav { display: none; }
@@ -606,6 +624,7 @@ main { padding: 16px 0; min-height: 60vh; }
       <button class="subtle-btn" id="cloud-btn">Cloud</button>
       <button class="subtle-btn" id="categories-btn">Categories</button>
       <button class="subtle-btn" id="colours-btn">Colours</button>
+      <button class="subtle-btn" id="digest-btn">Digest</button>
       <button class="subtle-btn" id="export-btn">Backup</button>
       <button class="subtle-btn" id="import-btn">Restore</button>
       <button class="subtle-btn danger hidden" id="purge-btn">Purge Trash</button>
@@ -980,6 +999,7 @@ function addItem(text) {
     status: 'inbox',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    _urgent: false,
     _deleted: false
   };
   data.items.unshift(item);
@@ -1244,6 +1264,9 @@ function renderReview() {
       <div class="card-footer">
         <span class="card-meta">${formatTime(item.createdAt)}</span>
         <div class="card-actions">
+          <button class="action-btn urgent-btn ${item._urgent ? 'active' : ''}" data-id="${esc(item.id)}" title="${item._urgent ? 'Remove urgent' : 'Mark urgent'}">
+            <span style="font-size:15px;font-weight:800;line-height:1;">!</span>
+          </button>
           <button class="action-btn edit" data-id="${esc(item.id)}" title="Move to account">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
               <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
@@ -1273,7 +1296,17 @@ function renderReview() {
       toast('Filed as ' + btn.dataset.cat.charAt(0).toUpperCase() + btn.dataset.cat.slice(1));
     });
   });
-  
+
+  list.querySelectorAll('.action-btn.urgent-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = data.items.find(i => i.id === btn.dataset.id);
+      if (!item) return;
+      updateItem(btn.dataset.id, { _urgent: !item._urgent });
+      renderReview();
+      toast(item._urgent ? 'Urgent removed' : 'Marked urgent');
+    });
+  });
+
   list.querySelectorAll('.action-btn.delete').forEach(btn => {
     btn.addEventListener('click', () => {
       const removed = deleteItem(btn.dataset.id);
@@ -1381,14 +1414,32 @@ function renderRetrieve() {
     }
     list.innerHTML = html;
   } else {
-    const groups = groupByDate(results);
+    // Pin urgent items at top, then date-group the rest
+    const urgent = results.filter(i => i._urgent);
+    const normal = results.filter(i => !i._urgent);
     let html = '';
+    if (urgent.length) {
+      html += `<div class="urgent-section-label">Urgent · ${urgent.length} item${urgent.length !== 1 ? 's' : ''}</div>`;
+      html += urgent.map(item => renderRetrieveCard(item)).join('');
+    }
+    const groups = groupByDate(normal);
     for (const [label, items] of groups) {
       html += `<div class="date-label">${escHtml(label)}</div>`;
       html += items.map(item => renderRetrieveCard(item)).join('');
     }
     list.innerHTML = html;
   }
+
+  // Wire up urgent buttons
+  list.querySelectorAll('.action-btn.urgent-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = data.items.find(i => i.id === btn.dataset.id);
+      if (!item) return;
+      updateItem(btn.dataset.id, { _urgent: !item._urgent });
+      renderRetrieve();
+      toast(item._urgent ? 'Urgent removed' : 'Marked urgent');
+    });
+  });
 
   // Wire up delete buttons
   list.querySelectorAll('.action-btn.delete').forEach(btn => {
@@ -1429,15 +1480,19 @@ function renderRetrieveCard(item) {
   const accOptions = data.accounts.map(a =>
     `<option value="${esc(a.name)}" ${a.name === item.account ? 'selected' : ''}>${escHtml(a.name)}</option>`
   ).join('');
-  
+  const urgentClass = item._urgent ? 'urgent' : '';
+
   return `
-    <div class="card" data-id="${esc(item.id)}">
+    <div class="card ${urgentClass}" data-id="${esc(item.id)}">
       <div class="card-text">
         <span class="cat-badge" style="${badgeStyle}">${catLabel}</span>${escHtml(item.text)}
       </div>
       <div class="card-footer">
         <span class="card-meta">${formatTime(item.createdAt)}</span>
         <div class="card-actions">
+          <button class="action-btn urgent-btn ${item._urgent ? 'active' : ''}" data-id="${esc(item.id)}" title="${item._urgent ? 'Remove urgent' : 'Mark urgent'}">
+            <span style="font-size:15px;font-weight:800;line-height:1;">!</span>
+          </button>
           <button class="action-btn edit" data-id="${esc(item.id)}" title="Move to account">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
               <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
@@ -1899,6 +1954,116 @@ function renderAll() {
   updateBadge();
   updateStats();
 }
+
+// ═══ EMAIL DIGEST ═══
+function buildDigestHtml() {
+  const live = data.items.filter(i => !i._deleted);
+  const accounts = data.accounts.filter(a => live.some(i => i.account === a.name));
+
+  const styles = `
+    body{font-family:Arial,sans-serif;font-size:14px;color:#111;background:#f5f5f5;padding:20px;}
+    h1{font-size:20px;font-weight:700;margin-bottom:4px;color:#0033CC;}
+    .meta{font-size:12px;color:#888;margin-bottom:24px;}
+    h2{font-size:15px;font-weight:700;margin:24px 0 8px;padding-bottom:6px;border-bottom:2px solid currentColor;}
+    h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin:16px 0 6px;}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px;}
+    th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:#888;padding:6px 8px;border-bottom:1px solid #ddd;}
+    td{padding:8px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top;}
+    tr:last-child td{border-bottom:none;}
+    .badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;text-transform:uppercase;background:#eee;color:#555;margin-right:4px;}
+    .urgent{color:#CC2200;font-weight:700;}
+    .tag-urgent{background:#fde8e4;color:#CC2200;}
+    .tag-inbox{background:#e8f0fe;color:#0033CC;}
+  `;
+
+  let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${styles}</style></head><body>`;
+  html += `<h1>TrigPoint Digest</h1>`;
+  html += `<p class="meta">Generated ${new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' })} · ${live.length} active item${live.length !== 1 ? 's' : ''}</p>`;
+
+  accounts.forEach(acc => {
+    const accItems = live.filter(i => i.account === acc.name);
+    if (!accItems.length) return;
+
+    const urgent  = accItems.filter(i => i._urgent);
+    const inbox   = accItems.filter(i => !i._urgent && i.status === 'inbox');
+    const stored  = accItems.filter(i => !i._urgent && i.status !== 'inbox');
+
+    html += `<h2 style="color:${acc.color}">${acc.name} <span style="font-size:12px;font-weight:400;color:#888;">(${accItems.length})</span></h2>`;
+
+    const renderTable = (items, showUrgent) => {
+      if (!items.length) return '';
+      return `<table><thead><tr><th>Item</th><th>Category</th><th>Added</th></tr></thead><tbody>` +
+        items.map(i => {
+          const cat = i.category ? i.category.charAt(0).toUpperCase() + i.category.slice(1) : '—';
+          const date = new Date(i.createdAt).toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+          const urgentMark = i._urgent ? ' <span class="badge tag-urgent">Urgent</span>' : '';
+          const inboxMark  = i.status === 'inbox' ? ' <span class="badge tag-inbox">Inbox</span>' : '';
+          return `<tr><td class="${i._urgent ? 'urgent' : ''}">${i.text}${urgentMark}${inboxMark}</td><td><span class="badge">${cat}</span></td><td style="white-space:nowrap;color:#888;">${date}</td></tr>`;
+        }).join('') +
+        `</tbody></table>`;
+    };
+
+    if (urgent.length) {
+      html += `<h3>⚠ Urgent (${urgent.length})</h3>` + renderTable(urgent);
+    }
+    if (inbox.length) {
+      html += `<h3>Inbox — needs filing (${inbox.length})</h3>` + renderTable(inbox);
+    }
+    if (stored.length) {
+      html += `<h3>Active items (${stored.length})</h3>` + renderTable(stored);
+    }
+  });
+
+  html += `</body></html>`;
+  return html;
+}
+
+async function sendDigest() {
+  if (!cloudUrl) {
+    toast('No cloud URL configured — set it in Cloud settings');
+    return;
+  }
+  const html = buildDigestHtml();
+  const live = data.items.filter(i => !i._deleted);
+  toast('Sending digest…');
+  try {
+    const res = await fetch(cloudUrl, {
+      method: 'POST',
+      redirect: 'follow',
+      body: JSON.stringify({
+        key: cloudKey,
+        action: 'digest',
+        digestHtml: html,
+        itemCount: live.length,
+        generatedAt: new Date().toISOString()
+      })
+    });
+    const text = await res.text();
+    let result;
+    try { result = JSON.parse(text); } catch(e) { result = {}; }
+    if (result.success) {
+      toast('Digest sent ✓');
+    } else {
+      toast('Digest failed — check Apps Script');
+      console.error('Digest error:', result);
+    }
+  } catch (e) {
+    console.error('Digest send error:', e);
+    toast('Digest send failed');
+  }
+}
+
+document.getElementById('digest-btn').addEventListener('click', () => {
+  const live = data.items.filter(i => !i._deleted);
+  const urgentCount = live.filter(i => i._urgent).length;
+  openModal(
+    'Send Digest Email',
+    `Send a digest of all ${live.length} active item${live.length !== 1 ? 's' : ''} across all accounts${urgentCount ? ` (${urgentCount} urgent)` : ''}?`,
+    null,
+    sendDigest,
+    'Send'
+  );
+});
 
 // ═══ INIT ═══
 document.getElementById('categories-btn').addEventListener('click', openCategorySettings);
