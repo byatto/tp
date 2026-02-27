@@ -4,10 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>TrigPoint</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='16' fill='%230033CC'/%3E%3Cpath d='M50 20 L75 70 L25 70 Z' fill='none' stroke='white' stroke-width='6'/%3E%3Ccircle cx='50' cy='52' r='5' fill='white'/%3E%3C/svg%3E" type="image/svg+xml">
+
+<!-- PWA manifest -->
+<link rel="manifest" href="manifest.json">
+
+<!-- iOS PWA -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#FAFAFA">
+<meta name="apple-mobile-web-app-title" content="TrigPoint">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<!-- Android / Chrome -->
+<meta name="theme-color" content="#0033CC">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="TrigPoint">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='16' fill='%230033CC'/%3E%3Cpath d='M50 20 L75 70 L25 70 Z' fill='none' stroke='white' stroke-width='6'/%3E%3Ccircle cx='50' cy='52' r='5' fill='white'/%3E%3C/svg%3E" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -27,7 +39,7 @@
       <div class="account-selector" id="account-selector">
         <button class="account-btn" id="account-btn">
           <span class="account-dot" id="account-dot"></span>
-          <span id="account-name">Personal</span>
+          <span class="account-initial" id="account-initial">P</span>
           <span class="account-arrow">▾</span>
         </button>
         <div class="account-dropdown" id="account-dropdown"></div>
@@ -163,6 +175,9 @@
       <div class="settings-row">
         <button class="subtle-btn" id="export-btn">Backup</button>
         <button class="subtle-btn" id="import-btn">Restore</button>
+        <button class="subtle-btn" id="trash-btn">
+          View Trash <span id="trash-count" class="hidden" style="background:var(--danger-bg);color:var(--danger);border-radius:8px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:4px;"></span>
+        </button>
         <button class="subtle-btn danger hidden" id="purge-btn">Purge Trash</button>
         <button class="subtle-btn danger" id="reset-btn">Reset app</button>
       </div>
@@ -198,5 +213,13 @@
 <input type="file" id="import-file" accept=".json" style="display:none">
 
 <script src="js/app.js"></script>
+<script>
+  // Register service worker for PWA / offline support
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+  }
+</script>
 </body>
 </html>

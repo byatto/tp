@@ -252,7 +252,9 @@ function renderAccountDropdown() {
   const dropdown = document.getElementById('account-dropdown');
   const current  = data.accounts.find(a => a.name === activeAccount) || data.accounts[0];
 
-  document.getElementById('account-name').textContent = activeAccount;
+  // Lozenge: coloured dot + first initial only
+  const initial = activeAccount.charAt(0).toUpperCase();
+  document.getElementById('account-initial').textContent = initial;
   document.getElementById('account-dot').style.background = current?.color || '#888';
 
   dropdown.innerHTML = data.accounts.map(acc => {
@@ -319,6 +321,75 @@ function setActiveAccount(name) {
   renderAccountDropdown();
   updateCaptureIndicator();
   renderAll();
+}
+
+// ═══ TRASH VIEW ═══
+function openTrashView() {
+  const deleted = data.items.filter(i => i._deleted);
+  openModal('Trash', `${deleted.length} deleted item${deleted.length !== 1 ? 's' : ''}`, ct => {
+    function renderTrash() {
+      if (!deleted.length) {
+        ct.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px 0;">Trash is empty</p>';
+        return;
+      }
+      ct.innerHTML = `
+        <div style="max-height:50vh;overflow-y:auto;margin-bottom:8px;">
+          ${deleted.map(item => {
+            const acc = data.accounts.find(a => a.name === item.account);
+            const colour = acc ? acc.color : '#888';
+            const date = new Date(item._deletedAt || item.createdAt).toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+            return `
+              <div style="padding:10px;border:1px solid var(--border-subtle);border-radius:6px;margin-bottom:8px;background:var(--bg-surface);">
+                <div style="font-size:14px;line-height:1.5;margin-bottom:8px;color:var(--text-secondary);">${escHtml(item.text)}</div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:11px;color:${colour};font-weight:600;">${escHtml(item.account)}</span>
+                  <span style="font-size:11px;color:var(--text-muted);">Deleted ${date}</span>
+                  <div style="display:flex;gap:6px;margin-left:auto;">
+                    <button class="subtle-btn trash-restore" data-id="${esc(item.id)}" style="font-size:11px;padding:4px 10px;">Restore</button>
+                    <button class="subtle-btn danger trash-purge-one" data-id="${esc(item.id)}" style="font-size:11px;padding:4px 10px;">Delete</button>
+                  </div>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>`;
+
+      ct.querySelectorAll('.trash-restore').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const item = data.items.find(i => i.id === btn.dataset.id);
+          if (item) { item._deleted = false; item._deletedAt = null; saveData(); renderAll(); }
+          const idx = deleted.findIndex(i => i.id === btn.dataset.id);
+          if (idx > -1) deleted.splice(idx, 1);
+          renderTrash();
+          document.getElementById('modal-title').textContent = `Trash · ${deleted.length} item${deleted.length !== 1 ? 's' : ''}`;
+          toast('Restored');
+        });
+      });
+
+      ct.querySelectorAll('.trash-purge-one').forEach(btn => {
+        btn.addEventListener('click', () => {
+          data.items = data.items.filter(i => i.id !== btn.dataset.id);
+          saveData(); renderAll();
+          const idx = deleted.findIndex(i => i.id === btn.dataset.id);
+          if (idx > -1) deleted.splice(idx, 1);
+          renderTrash();
+          document.getElementById('modal-title').textContent = `Trash · ${deleted.length} item${deleted.length !== 1 ? 's' : ''}`;
+        });
+      });
+    }
+    renderTrash();
+  }, () => {}, deleted.length ? 'Purge All' : 'Close', deleted.length > 0);
+
+  // Override confirm to purge all
+  setTimeout(() => {
+    const confirmBtn = document.getElementById('modal-confirm');
+    if (confirmBtn && deleted.length) {
+      confirmBtn.onclick = () => {
+        data.items = data.items.filter(i => !i._deleted);
+        saveData(); renderAll(); closeModal();
+        toast('Trash purged');
+      };
+    }
+  }, 50);
 }
 
 document.getElementById('account-btn').addEventListener('click', e => {
@@ -956,12 +1027,14 @@ document.getElementById('import-file').addEventListener('change', e => {
   reader.readAsText(file); e.target.value = '';
 });
 
+document.getElementById('trash-btn').addEventListener('click', () => {
+  settingsPanelOverlay.classList.remove('open');
+  openTrashView();
+});
+
 document.getElementById('purge-btn').addEventListener('click', () => {
-  const count = data.items.filter(i => i._deleted).length;
-  openModal('Purge Trash?', `Permanently delete ${count} items?`, null, () => {
-    data.items = data.items.filter(i => !i._deleted);
-    saveData(); renderAll(); toast('Trash purged');
-  }, 'Purge', true);
+  settingsPanelOverlay.classList.remove('open');
+  openTrashView();
 });
 
 document.getElementById('reset-btn').addEventListener('click', () => {
@@ -1107,6 +1180,14 @@ function updateStats() {
   if (deleted > 0) text += ' · ' + deleted + ' in trash';
   const el = document.getElementById('stats-text');
   if (el) el.textContent = text;
+
+  // Trash count badge on View Trash button
+  const trashCount = document.getElementById('trash-count');
+  if (trashCount) {
+    if (deleted > 0) { trashCount.textContent = deleted; trashCount.classList.remove('hidden'); }
+    else { trashCount.classList.add('hidden'); }
+  }
+
   const purgeBtn = document.getElementById('purge-btn');
   if (purgeBtn) purgeBtn.classList.toggle('hidden', deleted === 0);
 }

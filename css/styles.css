@@ -82,14 +82,16 @@ header {
 /* Account Selector */
 .account-selector { position: relative; }
 .account-btn {
-  display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+  display: flex; align-items: center; gap: 5px; padding: 5px 10px;
   background: var(--bg-hover); border: none; border-radius: 100px;
-  font-family: var(--font); font-size: 13px; font-weight: 600;
+  font-family: var(--font); font-size: 13px; font-weight: 700;
   color: var(--text); cursor: pointer; transition: all var(--transition);
+  min-width: 0;
 }
 .account-btn:hover { background: var(--border); }
 .account-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
-.account-arrow { font-size: 10px; opacity: 0.5; margin-left: 2px; }
+.account-initial { font-size: 13px; font-weight: 700; letter-spacing: -0.2px; }
+.account-arrow { font-size: 10px; opacity: 0.5; margin-left: 1px; }
 .account-dropdown {
   position: absolute; top: calc(100% + 6px); left: 0; min-width: 200px;
   background: var(--bg-elevated); border: 1px solid var(--border);
