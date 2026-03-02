@@ -107,6 +107,7 @@ function showDebugToast(msg) {
 function setSyncStatus(status) {
   const dot = document.getElementById('sync-dot');
   const label = document.getElementById('sync-label');
+  if (!dot || !label) return; // Panel not open / not in DOM yet — skip safely
   dot.className = 'sync-dot';
   if (status === 'syncing') { dot.classList.add('syncing'); label.textContent = 'Syncing…'; }
   else if (status === 'online') { dot.classList.add('online'); label.textContent = 'Synced'; }
@@ -173,7 +174,8 @@ async function pushToCloud() {
 }
 
 document.addEventListener('visibilitychange', () => { if (!document.hidden && cloudUrl) pullFromCloud(); });
-if (cloudUrl) { setTimeout(pullFromCloud, 500); } else { setSyncStatus('offline'); }
+// Defer sync init until DOM is fully ready
+if (cloudUrl) { setTimeout(pullFromCloud, 500); } else { setTimeout(() => setSyncStatus('offline'), 0); }
 
 // ═══ ITEM OPERATIONS ═══
 function addItem(text) {
@@ -250,6 +252,7 @@ document.getElementById('theme-toggle').addEventListener('click', () => applyThe
 // ═══ ACCOUNT SELECTOR ═══
 function renderAccountDropdown() {
   const dropdown = document.getElementById('account-dropdown');
+  if (!dropdown) return; // Header not in DOM yet — bail safely
   const current  = data.accounts.find(a => a.name === activeAccount) || data.accounts[0];
   const colour   = (current?.color && current.color !== '#888' && current.color !== '#888888')
                     ? current.color : '#0033CC';
