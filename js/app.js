@@ -690,10 +690,44 @@ function renderReview() {
   });
 
   // Due date change
+  // Due date change — update inline without re-rendering (preserves pending category selection)
   list.querySelectorAll('.review-due-input').forEach(el => {
     el.addEventListener('change', () => {
       updateItem(el.dataset.id, { dueDate: el.value || null });
-      renderReview();
+      // Update the due tag and clear button inline instead of full re-render
+      const row = el.closest('.review-due-row');
+      if (row) {
+        // Remove old tag and clear button
+        row.querySelectorAll('.due-tag, .review-due-none, .review-due-clear').forEach(e => e.remove());
+        // Add new ones
+        if (el.value) {
+          const clearBtn = document.createElement('button');
+          clearBtn.className = 'review-due-clear';
+          clearBtn.dataset.id = el.dataset.id;
+          clearBtn.title = 'Clear due date';
+          clearBtn.textContent = '×';
+          clearBtn.addEventListener('click', () => {
+            updateItem(el.dataset.id, { dueDate: null });
+            el.value = '';
+            clearBtn.remove();
+            row.querySelectorAll('.due-tag').forEach(e => e.remove());
+            const none = document.createElement('span');
+            none.className = 'review-due-none';
+            none.textContent = 'No date set';
+            row.appendChild(none);
+            toast('Due date cleared');
+          });
+          row.appendChild(clearBtn);
+          const tagSpan = document.createElement('span');
+          tagSpan.innerHTML = formatDueDate(el.value);
+          row.appendChild(tagSpan.firstChild);
+        } else {
+          const none = document.createElement('span');
+          none.className = 'review-due-none';
+          none.textContent = 'No date set';
+          row.appendChild(none);
+        }
+      }
       toast(el.value ? 'Due date set' : 'Due date cleared');
     });
   });
@@ -702,7 +736,16 @@ function renderReview() {
   list.querySelectorAll('.review-due-clear').forEach(btn => {
     btn.addEventListener('click', () => {
       updateItem(btn.dataset.id, { dueDate: null });
-      renderReview();
+      const row = btn.closest('.review-due-row');
+      if (row) {
+        const input = row.querySelector('.review-due-input');
+        if (input) input.value = '';
+        row.querySelectorAll('.due-tag, .review-due-clear').forEach(e => e.remove());
+        const none = document.createElement('span');
+        none.className = 'review-due-none';
+        none.textContent = 'No date set';
+        row.appendChild(none);
+      }
       toast('Due date cleared');
     });
   });
