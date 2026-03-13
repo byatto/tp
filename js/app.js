@@ -180,13 +180,13 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && cl
 if (cloudUrl) { setTimeout(pullFromCloud, 500); } else { setTimeout(() => setSyncStatus('offline'), 0); }
 
 // ═══ ITEM OPERATIONS ═══
-function addItem(text, dueDate) {
+function addItem(text) {
   const item = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     text: text.trim(), account: activeAccount, category: '', status: 'inbox',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     _urgent: false, _deleted: false, _done: false,
-    dueDate: dueDate || null, completedAt: null
+    dueDate: null, completedAt: null
   };
   data.items.unshift(item);
   saveData(); return item;
@@ -478,15 +478,12 @@ document.querySelectorAll('#nav-desktop button, #nav-mobile button').forEach(b =
 // ═══ CAPTURE ═══
 const captureInput = document.getElementById('capture-input');
 const captureBtn   = document.getElementById('capture-btn');
-const captureDue   = document.getElementById('capture-due');
 
 function doCapture() {
   const text = captureInput.value.trim();
   if (!text) { captureInput.focus(); return; }
-  const dueDate = captureDue.value || null;
-  addItem(text, dueDate);
+  addItem(text);
   captureInput.value = '';
-  captureDue.value = '';
   toast('Saved to Inbox');
   updateBadge(); updateStats();
 }
@@ -545,6 +542,15 @@ function renderReview() {
               ${cat.charAt(0).toUpperCase() + cat.slice(1)}
             </button>`;
           }).join('')}
+        </div>
+        <div class="review-due-row">
+          <label class="review-due-label">
+            <svg viewBox="0 0 24 24" width="13" height="13"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" fill="currentColor"/></svg>
+            Due
+          </label>
+          <input type="date" class="review-due-input" data-id="${esc(item.id)}" value="${item.dueDate || ''}">
+          ${item.dueDate ? `<button class="review-due-clear" data-id="${esc(item.id)}" title="Clear due date">×</button>` : ''}
+          ${item.dueDate ? formatDueDate(item.dueDate) : '<span class="review-due-none">No date set</span>'}
         </div>
         <div class="file-confirm-row ${item.category ? 'visible' : ''}" id="confirm-row-${esc(item.id)}">
           <button class="file-confirm-btn" data-id="${esc(item.id)}">
@@ -680,6 +686,24 @@ function renderReview() {
     el.addEventListener('blur', () => {
       const item = data.items.find(i => i.id === el.dataset.id);
       if (item && item.text !== el.value.trim()) updateItem(el.dataset.id, { text: el.value.trim() });
+    });
+  });
+
+  // Due date change
+  list.querySelectorAll('.review-due-input').forEach(el => {
+    el.addEventListener('change', () => {
+      updateItem(el.dataset.id, { dueDate: el.value || null });
+      renderReview();
+      toast(el.value ? 'Due date set' : 'Due date cleared');
+    });
+  });
+
+  // Due date clear button
+  list.querySelectorAll('.review-due-clear').forEach(btn => {
+    btn.addEventListener('click', () => {
+      updateItem(btn.dataset.id, { dueDate: null });
+      renderReview();
+      toast('Due date cleared');
     });
   });
 
