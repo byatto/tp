@@ -877,6 +877,63 @@ function renderBrowse() {
     });
   });
 
+  // Due date change — inline update (no full re-render)
+  list.querySelectorAll('.review-due-input').forEach(el => {
+    el.addEventListener('change', () => {
+      updateItem(el.dataset.id, { dueDate: el.value || null });
+      const row = el.closest('.review-due-row');
+      if (row) {
+        row.querySelectorAll('.due-tag, .review-due-none, .review-due-clear').forEach(e => e.remove());
+        if (el.value) {
+          const clearBtn = document.createElement('button');
+          clearBtn.className = 'review-due-clear';
+          clearBtn.dataset.id = el.dataset.id;
+          clearBtn.title = 'Clear due date';
+          clearBtn.textContent = '×';
+          clearBtn.addEventListener('click', () => {
+            updateItem(el.dataset.id, { dueDate: null });
+            el.value = '';
+            clearBtn.remove();
+            row.querySelectorAll('.due-tag').forEach(e => e.remove());
+            const none = document.createElement('span');
+            none.className = 'review-due-none';
+            none.textContent = 'No date set';
+            row.appendChild(none);
+            toast('Due date cleared');
+          });
+          row.appendChild(clearBtn);
+          const tagSpan = document.createElement('span');
+          tagSpan.innerHTML = formatDueDate(el.value);
+          row.appendChild(tagSpan.firstChild);
+        } else {
+          const none = document.createElement('span');
+          none.className = 'review-due-none';
+          none.textContent = 'No date set';
+          row.appendChild(none);
+        }
+      }
+      toast(el.value ? 'Due date set' : 'Due date cleared');
+    });
+  });
+
+  // Due date clear button
+  list.querySelectorAll('.review-due-clear').forEach(btn => {
+    btn.addEventListener('click', () => {
+      updateItem(btn.dataset.id, { dueDate: null });
+      const row = btn.closest('.review-due-row');
+      if (row) {
+        const input = row.querySelector('.review-due-input');
+        if (input) input.value = '';
+        row.querySelectorAll('.due-tag, .review-due-clear').forEach(e => e.remove());
+        const none = document.createElement('span');
+        none.className = 'review-due-none';
+        none.textContent = 'No date set';
+        row.appendChild(none);
+      }
+      toast('Due date cleared');
+    });
+  });
+
   // Swipe to delete on browse cards
   list.querySelectorAll('.card').forEach(card => initSwipe(card, id => {
     const removed = deleteItem(id);
@@ -919,8 +976,17 @@ function renderBrowseCard(item) {
         <div class="card-text">
           <span class="cat-badge" style="${badgeStyle}">${catLabel}</span>${escHtml(item.text)}
         </div>
+        <div class="review-due-row">
+          <label class="review-due-label">
+            <svg viewBox="0 0 24 24" width="13" height="13"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" fill="currentColor"/></svg>
+            Due
+          </label>
+          <input type="date" class="review-due-input" data-id="${esc(item.id)}" value="${item.dueDate || ''}">
+          ${item.dueDate ? `<button class="review-due-clear" data-id="${esc(item.id)}" title="Clear due date">×</button>` : ''}
+          ${item.dueDate ? formatDueDate(item.dueDate) : '<span class="review-due-none">No date set</span>'}
+        </div>
         <div class="card-footer">
-          <span class="card-meta">${dueBadge || formatTime(item.createdAt)}</span>
+          <span class="card-meta">${formatTime(item.createdAt)}</span>
           <div class="card-actions">
             <button class="action-btn done-btn" data-id="${esc(item.id)}" title="Mark done">
               ${doneSVG()}
