@@ -1,7 +1,6 @@
 // ═══════════════════════════════════════════════════════════
-// TRIGPOINT v2.1 — app.js
-// Improvements: settings panel, capture indicator, cross-account
-// badge, move icon fix, item counts in dropdown, swipe-to-delete
+// TRIGPOINT v2.3 — app.js
+// Additions: due dates, mark done, improved digest
 // ═══════════════════════════════════════════════════════════
 
 const STORAGE_KEY      = 'trigpoint_v2_data';
@@ -66,6 +65,9 @@ function loadData() {
         if (!i.account)   i.account   = d.accounts[0]?.name || 'Personal';
         if (!i.category)  i.category  = '';
         if (!i.status)    i.status    = 'inbox';
+        if (i._done === undefined) i._done = false;
+        if (i.dueDate === undefined) i.dueDate = null;
+        if (i.completedAt === undefined) i.completedAt = null;
       });
       const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
       d.items = d.items.filter(i => {
@@ -178,12 +180,13 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && cl
 if (cloudUrl) { setTimeout(pullFromCloud, 500); } else { setTimeout(() => setSyncStatus('offline'), 0); }
 
 // ═══ ITEM OPERATIONS ═══
-function addItem(text) {
+function addItem(text, dueDate) {
   const item = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     text: text.trim(), account: activeAccount, category: '', status: 'inbox',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    _urgent: false, _deleted: false
+    _urgent: false, _deleted: false, _done: false,
+    dueDate: dueDate || null, completedAt: null
   };
   data.items.unshift(item);
   saveData(); return item;
@@ -203,6 +206,24 @@ function deleteItem(id) {
   return null;
 }
 
+function markDone(id) {
+  const item = data.items.find(i => i.id === id);
+  if (item) {
+    item._done = true;
+    item.completedAt = new Date().toISOString();
+    item.updatedAt = new Date().toISOString();
+    saveData();
+    return { ...item, _done: false, completedAt: null };
+  }
+  return null;
+}
+
+function undoDone(item) {
+  const existing = data.items.find(i => i.id === item.id);
+  if (existing) { existing._done = false; existing.completedAt = null; existing.updatedAt = new Date().toISOString(); }
+  saveData();
+}
+
 function restoreItem(item) {
   const existing = data.items.find(i => i.id === item.id);
   if (existing) { existing._deleted = false; existing._deletedAt = null; }
@@ -212,15 +233,15 @@ function restoreItem(item) {
 
 function getInboxItems(account) {
   const acc = account || activeAccount;
-  return data.items.filter(i => i.account === acc && i.status === 'inbox' && !i.category && !i._deleted);
+  return data.items.filter(i => i.account === acc && i.status === 'inbox' && !i.category && !i._deleted && !i._done);
 }
 
 function getAllInboxCount() {
-  return data.items.filter(i => i.status === 'inbox' && !i.category && !i._deleted).length;
+  return data.items.filter(i => i.status === 'inbox' && !i.category && !i._deleted && !i._done).length;
 }
 
 function searchItems(query, category, sort) {
-  let results = data.items.filter(i => !i._deleted);
+  let results = data.items.filter(i => !i._deleted && !i._done);
   if (!allAccounts) results = results.filter(i => i.account === activeAccount);
   if (category === 'inbox') results = results.filter(i => !i.category);
   else if (category && category !== 'all') results = results.filter(i => i.category === category);
@@ -232,7 +253,16 @@ function searchItems(query, category, sort) {
       (i.category && i.category.toLowerCase().includes(q))
     );
   }
-  results.sort((a, b) => sort === 'oldest' ? new Date(a.createdAt) - new Date(b.createdAt) : new Date(b.createdAt) - new Date(a.createdAt));
+  if (sort === 'due') {
+    results.sort((a, b) => {
+      if (a.dueDate && b.dueDate) return new Date(a.dueDate) - new Date(b.dueDate);
+      if (a.dueDate) return -1;
+      if (b.dueDate) return 1;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+  } else {
+    results.sort((a, b) => sort === 'oldest' ? new Date(a.createdAt) - new Date(b.createdAt) : new Date(b.createdAt) - new Date(a.createdAt));
+  }
   return results;
 }
 
@@ -448,12 +478,15 @@ document.querySelectorAll('#nav-desktop button, #nav-mobile button').forEach(b =
 // ═══ CAPTURE ═══
 const captureInput = document.getElementById('capture-input');
 const captureBtn   = document.getElementById('capture-btn');
+const captureDue   = document.getElementById('capture-due');
 
 function doCapture() {
   const text = captureInput.value.trim();
   if (!text) { captureInput.focus(); return; }
-  addItem(text);
+  const dueDate = captureDue.value || null;
+  addItem(text, dueDate);
   captureInput.value = '';
+  captureDue.value = '';
   toast('Saved to Inbox');
   updateBadge(); updateStats();
 }
@@ -520,8 +553,11 @@ function renderReview() {
           <button class="file-cancel-btn" data-id="${esc(item.id)}">Cancel</button>
         </div>
         <div class="card-footer">
-          <span class="card-meta">${formatTime(item.createdAt)}</span>
+          <span class="card-meta">${item.dueDate ? formatDueDate(item.dueDate) : formatTime(item.createdAt)}</span>
           <div class="card-actions">
+            <button class="action-btn done-btn" data-id="${esc(item.id)}" title="Mark done">
+              ${doneSVG()}
+            </button>
             <button class="action-btn urgent-btn ${item._urgent ? 'active' : ''}" data-id="${esc(item.id)}" title="${item._urgent ? 'Remove urgent' : 'Mark urgent'}">
               <span style="font-size:15px;font-weight:800;line-height:1;">!</span>
             </button>
@@ -592,6 +628,14 @@ function renderReview() {
       card.querySelectorAll('.cat-btn').forEach(b => { b.classList.remove('selected'); b.removeAttribute('style'); });
       const confirmRow = document.getElementById('confirm-row-' + itemId);
       if (confirmRow) confirmRow.classList.remove('visible');
+    });
+  });
+
+  list.querySelectorAll('.action-btn.done-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const undoData = markDone(btn.dataset.id);
+      if (undoData) showUndoDone('Marked done ✓', undoData);
+      renderReview(); updateBadge(); updateStats();
     });
   });
 
@@ -723,6 +767,14 @@ function renderBrowse() {
     list.innerHTML = html;
   }
 
+  list.querySelectorAll('.action-btn.done-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const undoData = markDone(btn.dataset.id);
+      if (undoData) showUndoDone('Marked done ✓', undoData);
+      renderBrowse(); updateBadge(); updateStats();
+    });
+  });
+
   list.querySelectorAll('.action-btn.urgent-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const item = data.items.find(i => i.id === btn.dataset.id);
@@ -766,6 +818,24 @@ function renderBrowse() {
   }));
 }
 
+function doneSVG() {
+  return `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`;
+}
+
+function formatDueDate(dateStr) {
+  if (!dateStr) return '';
+  const due = new Date(dateStr + 'T00:00:00');
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const diff = Math.floor((due - today) / 86400000);
+  if (diff < 0) return `<span class="due-tag overdue">Overdue ${Math.abs(diff)}d</span>`;
+  if (diff === 0) return `<span class="due-tag due-today">Due today</span>`;
+  if (diff === 1) return `<span class="due-tag due-soon">Tomorrow</span>`;
+  if (diff <= 7) return `<span class="due-tag due-soon">${diff}d</span>`;
+  return `<span class="due-tag">${due.toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</span>`;
+}
+
 function renderBrowseCard(item) {
   const catStyle = getCatStyle(item.category);
   const catLabel = item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : 'Inbox';
@@ -773,6 +843,7 @@ function renderBrowseCard(item) {
   const accOptions = data.accounts.map(a =>
     `<option value="${esc(a.name)}" ${a.name === item.account ? 'selected' : ''}>${escHtml(a.name)}</option>`
   ).join('');
+  const dueBadge = formatDueDate(item.dueDate);
 
   return `
     <div class="card ${item._urgent ? 'urgent' : ''}" data-id="${esc(item.id)}">
@@ -782,8 +853,11 @@ function renderBrowseCard(item) {
           <span class="cat-badge" style="${badgeStyle}">${catLabel}</span>${escHtml(item.text)}
         </div>
         <div class="card-footer">
-          <span class="card-meta">${formatTime(item.createdAt)}</span>
+          <span class="card-meta">${dueBadge || formatTime(item.createdAt)}</span>
           <div class="card-actions">
+            <button class="action-btn done-btn" data-id="${esc(item.id)}" title="Mark done">
+              ${doneSVG()}
+            </button>
             <button class="action-btn urgent-btn ${item._urgent ? 'active' : ''}" data-id="${esc(item.id)}" title="${item._urgent ? 'Remove urgent' : 'Mark urgent'}">
               <span style="font-size:15px;font-weight:800;line-height:1;">!</span>
             </button>
@@ -921,7 +995,21 @@ function showUndo(msg, item) {
   undoTimer = setTimeout(() => { toastEl.classList.remove('show'); undoItem = null; }, 6000);
 }
 
+let undoDoneItem = null;
+function showUndoDone(msg, item) {
+  undoDoneItem = item; toastText.textContent = msg; undoBtn.classList.remove('hidden');
+  toastEl.classList.add('show');
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { toastEl.classList.remove('show'); undoDoneItem = null; }, 6000);
+}
+
 undoBtn.addEventListener('click', () => {
+  if (undoDoneItem) {
+    undoDone(undoDoneItem); undoDoneItem = null;
+    toastEl.classList.remove('show');
+    renderAll(); toast('Restored');
+    return;
+  }
   if (undoItem) {
     restoreItem(undoItem); undoItem = null;
     toastEl.classList.remove('show');
@@ -967,9 +1055,11 @@ settingsPanelOverlay.addEventListener('click', e => {
 });
 
 function updateStatsLabel() {
-  const active  = data.items.filter(i => !i._deleted).length;
+  const active  = data.items.filter(i => !i._deleted && !i._done).length;
+  const done    = data.items.filter(i => i._done && !i._deleted).length;
   const deleted = data.items.filter(i => i._deleted).length;
-  let text = active + ' items';
+  let text = active + ' active';
+  if (done > 0) text += ' · ' + done + ' done';
   if (deleted > 0) text += ' · ' + deleted + ' in trash';
   const el = document.getElementById('stats-text');
   if (el) el.textContent = text;
@@ -1188,9 +1278,11 @@ function updateBadge() {
 }
 
 function updateStats() {
-  const active  = data.items.filter(i => !i._deleted).length;
+  const active  = data.items.filter(i => !i._deleted && !i._done).length;
+  const done    = data.items.filter(i => i._done && !i._deleted).length;
   const deleted = data.items.filter(i => i._deleted).length;
-  let text = active + ' items';
+  let text = active + ' active';
+  if (done > 0) text += ' · ' + done + ' done';
   if (deleted > 0) text += ' · ' + deleted + ' in trash';
   const el = document.getElementById('stats-text');
   if (el) el.textContent = text;
@@ -1247,33 +1339,123 @@ function renderAll() {
 
 // ═══ EMAIL DIGEST ═══
 function buildDigestHtml() {
-  const live = data.items.filter(i => !i._deleted);
-  const accounts = data.accounts.filter(a => live.some(i => i.account === a.name));
-  const styles = `body{font-family:Arial,sans-serif;font-size:14px;color:#111;background:#f5f5f5;padding:20px;}h1{font-size:20px;font-weight:700;margin-bottom:4px;color:#0033CC;}.meta{font-size:12px;color:#888;margin-bottom:24px;}h2{font-size:15px;font-weight:700;margin:24px 0 8px;padding-bottom:6px;border-bottom:2px solid currentColor;}h3{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin:16px 0 6px;}table{width:100%;border-collapse:collapse;margin-bottom:12px;}th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:#888;padding:6px 8px;border-bottom:1px solid #ddd;}td{padding:8px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top;}tr:last-child td{border-bottom:none;}.badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;text-transform:uppercase;background:#eee;color:#555;margin-right:4px;}.urgent{color:#CC2200;font-weight:700;}.tag-urgent{background:#fde8e4;color:#CC2200;}.tag-inbox{background:#e8f0fe;color:#0033CC;}`;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekFromNow = new Date(today); weekFromNow.setDate(today.getDate() + 7);
+  const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
+
+  const active = data.items.filter(i => !i._deleted && !i._done);
+  const completedRecently = data.items.filter(i => !i._deleted && i._done && i.completedAt && new Date(i.completedAt) >= weekAgo);
+  const accounts = data.accounts.filter(a =>
+    active.some(i => i.account === a.name) || completedRecently.some(i => i.account === a.name)
+  );
+
+  // Categorise active items
+  const overdue = active.filter(i => i.dueDate && new Date(i.dueDate + 'T23:59:59') < today);
+  const dueThisWeek = active.filter(i => i.dueDate && new Date(i.dueDate + 'T00:00:00') >= today && new Date(i.dueDate + 'T00:00:00') < weekFromNow);
+  const noDueDate = active.filter(i => !i.dueDate);
+  const dueLater = active.filter(i => i.dueDate && new Date(i.dueDate + 'T00:00:00') >= weekFromNow);
+
+  const styles = `body{font-family:Arial,sans-serif;font-size:14px;color:#111;background:#f5f5f5;padding:20px;max-width:640px;margin:0 auto;}
+h1{font-size:20px;font-weight:700;margin-bottom:4px;color:#0033CC;}
+.meta{font-size:12px;color:#888;margin-bottom:24px;}
+.section{margin-bottom:28px;padding:16px;background:#fff;border-radius:8px;border:1px solid #e0e0e0;}
+.section-title{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid currentColor;}
+.section-title.overdue{color:#CC2200;}
+.section-title.this-week{color:#0033CC;}
+.section-title.completed{color:#00875A;}
+.section-title.upcoming{color:#888;}
+.section-title.no-date{color:#888;}
+table{width:100%;border-collapse:collapse;}
+th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:#888;padding:6px 8px;border-bottom:1px solid #ddd;}
+td{padding:8px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+.badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;text-transform:uppercase;margin-right:4px;}
+.acc-badge{background:#eee;color:#555;}
+.urgent-badge{background:#fde8e4;color:#CC2200;}
+.overdue-text{color:#CC2200;font-weight:600;}
+.done-text{text-decoration:line-through;color:#888;}
+.count{font-size:12px;font-weight:400;color:#888;margin-left:4px;}
+.empty{font-size:13px;color:#aaa;font-style:italic;padding:8px 0;}
+.summary{background:#fff;border-radius:8px;border:1px solid #e0e0e0;padding:16px;margin-bottom:20px;display:flex;gap:20px;flex-wrap:wrap;}
+.stat{text-align:center;flex:1;min-width:80px;}
+.stat-num{font-size:28px;font-weight:700;line-height:1.2;}
+.stat-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.05em;}
+.stat-num.danger{color:#CC2200;}
+.stat-num.accent{color:#0033CC;}
+.stat-num.success{color:#00875A;}`;
+
+  const renderRow = (item, showDue = true) => {
+    const acc = data.accounts.find(a => a.name === item.account);
+    const accColor = acc ? acc.color : '#888';
+    const due = item.dueDate ? new Date(item.dueDate + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short' }) : '—';
+    const urgentMark = item._urgent ? '<span class="badge urgent-badge">Urgent</span>' : '';
+    const isOverdue = item.dueDate && new Date(item.dueDate + 'T23:59:59') < today && !item._done;
+    return `<tr>
+      <td class="${isOverdue ? 'overdue-text' : ''} ${item._done ? 'done-text' : ''}">${urgentMark}${item.text}</td>
+      <td><span class="badge acc-badge" style="color:${accColor};background:${accColor}11;">${item.account}</span></td>
+      ${showDue ? `<td style="white-space:nowrap;color:${isOverdue ? '#CC2200' : '#888'};">${due}</td>` : ''}
+      ${item._done && item.completedAt ? `<td style="white-space:nowrap;color:#00875A;font-size:12px;">${new Date(item.completedAt).toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</td>` : ''}
+    </tr>`;
+  };
+
+  const renderTable = (items, showDue = true, showCompleted = false) => {
+    if (!items.length) return '<p class="empty">None</p>';
+    return `<table><thead><tr><th>Item</th><th>Account</th>${showDue ? '<th>Due</th>' : ''}${showCompleted ? '<th>Done</th>' : ''}</tr></thead><tbody>` +
+      items.map(i => renderRow(i, showDue)).join('') + '</tbody></table>';
+  };
+
   let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${styles}</style></head><body>`;
-  html += `<h1>TrigPoint Digest</h1><p class="meta">Generated ${new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' })} · ${live.length} active item${live.length !== 1 ? 's' : ''}</p>`;
-  accounts.forEach(acc => {
-    const accItems = live.filter(i => i.account === acc.name);
-    if (!accItems.length) return;
-    const urgent = accItems.filter(i => i._urgent);
-    const inbox  = accItems.filter(i => !i._urgent && i.status === 'inbox');
-    const stored = accItems.filter(i => !i._urgent && i.status !== 'inbox');
-    html += `<h2 style="color:${acc.color}">${acc.name} <span style="font-size:12px;font-weight:400;color:#888;">(${accItems.length})</span></h2>`;
-    const renderTable = items => {
-      if (!items.length) return '';
-      return `<table><thead><tr><th>Item</th><th>Category</th><th>Added</th></tr></thead><tbody>` +
-        items.map(i => {
-          const cat = i.category ? i.category.charAt(0).toUpperCase() + i.category.slice(1) : '—';
-          const date = new Date(i.createdAt).toLocaleDateString('en-GB', { day:'numeric', month:'short' });
-          const urgentMark = i._urgent ? ' <span class="badge tag-urgent">Urgent</span>' : '';
-          const inboxMark  = i.status === 'inbox' ? ' <span class="badge tag-inbox">Inbox</span>' : '';
-          return `<tr><td class="${i._urgent ? 'urgent' : ''}">${i.text}${urgentMark}${inboxMark}</td><td><span class="badge">${cat}</span></td><td style="white-space:nowrap;color:#888;">${date}</td></tr>`;
-        }).join('') + `</tbody></table>`;
-    };
-    if (urgent.length) html += `<h3>⚠ Urgent (${urgent.length})</h3>` + renderTable(urgent);
-    if (inbox.length)  html += `<h3>Inbox — needs filing (${inbox.length})</h3>` + renderTable(inbox);
-    if (stored.length) html += `<h3>Active items (${stored.length})</h3>` + renderTable(stored);
-  });
+  html += `<h1>TrigPoint Weekly Digest</h1>`;
+  html += `<p class="meta">${now.toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}</p>`;
+
+  // Summary stats
+  html += `<div class="summary">
+    <div class="stat"><div class="stat-num danger">${overdue.length}</div><div class="stat-label">Overdue</div></div>
+    <div class="stat"><div class="stat-num accent">${dueThisWeek.length}</div><div class="stat-label">This week</div></div>
+    <div class="stat"><div class="stat-num success">${completedRecently.length}</div><div class="stat-label">Done (7d)</div></div>
+    <div class="stat"><div class="stat-num">${active.length}</div><div class="stat-label">Total active</div></div>
+  </div>`;
+
+  // Overdue
+  if (overdue.length) {
+    html += `<div class="section"><div class="section-title overdue">⚠ Overdue<span class="count">(${overdue.length})</span></div>`;
+    overdue.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    html += renderTable(overdue);
+    html += `</div>`;
+  }
+
+  // Due this week
+  html += `<div class="section"><div class="section-title this-week">Due This Week<span class="count">(${dueThisWeek.length})</span></div>`;
+  dueThisWeek.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  html += renderTable(dueThisWeek);
+  html += `</div>`;
+
+  // Completed recently
+  if (completedRecently.length) {
+    html += `<div class="section"><div class="section-title completed">Completed This Week<span class="count">(${completedRecently.length})</span></div>`;
+    completedRecently.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+    html += renderTable(completedRecently, false, true);
+    html += `</div>`;
+  }
+
+  // Items with no due date (inbox/operational)
+  if (noDueDate.length) {
+    html += `<div class="section"><div class="section-title no-date">No Due Date<span class="count">(${noDueDate.length})</span></div>`;
+    const urgentNoDue = noDueDate.filter(i => i._urgent);
+    const normalNoDue = noDueDate.filter(i => !i._urgent);
+    html += renderTable([...urgentNoDue, ...normalNoDue], false);
+    html += `</div>`;
+  }
+
+  // Due later (beyond this week)
+  if (dueLater.length) {
+    html += `<div class="section"><div class="section-title upcoming">Upcoming<span class="count">(${dueLater.length})</span></div>`;
+    dueLater.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    html += renderTable(dueLater);
+    html += `</div>`;
+  }
+
   html += `</body></html>`;
   return html;
 }
@@ -1281,12 +1463,19 @@ function buildDigestHtml() {
 async function sendDigest() {
   if (!cloudUrl) { toast('No cloud URL configured — set it in Cloud settings'); return; }
   const html = buildDigestHtml();
-  const live  = data.items.filter(i => !i._deleted);
+  const active = data.items.filter(i => !i._deleted && !i._done);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const overdueCount = active.filter(i => i.dueDate && new Date(i.dueDate + 'T23:59:59') < today).length;
   toast('Sending digest…');
   try {
     const res = await fetch(cloudUrl, {
       method: 'POST', redirect: 'follow',
-      body: JSON.stringify({ key: cloudKey, action: 'digest', digestHtml: html, itemCount: live.length, generatedAt: new Date().toISOString() })
+      body: JSON.stringify({
+        key: cloudKey, action: 'digest', digestHtml: html,
+        itemCount: active.length, overdueCount: overdueCount,
+        generatedAt: new Date().toISOString()
+      })
     });
     const result = JSON.parse(await res.text());
     toast(result.success ? 'Digest sent ✓' : 'Digest failed — check Apps Script');
@@ -1294,11 +1483,15 @@ async function sendDigest() {
 }
 
 document.getElementById('digest-btn').addEventListener('click', () => {
-  const live = data.items.filter(i => !i._deleted);
-  const urgentCount = live.filter(i => i._urgent).length;
+  const active = data.items.filter(i => !i._deleted && !i._done);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const overdueCount = active.filter(i => i.dueDate && new Date(i.dueDate + 'T23:59:59') < today).length;
+  const weekFromNow = new Date(today); weekFromNow.setDate(today.getDate() + 7);
+  const dueThisWeekCount = active.filter(i => i.dueDate && new Date(i.dueDate + 'T00:00:00') >= today && new Date(i.dueDate + 'T00:00:00') < weekFromNow).length;
   openModal(
-    'Send Digest Email',
-    `Send a digest of all ${live.length} active item${live.length !== 1 ? 's' : ''} across all accounts${urgentCount ? ` (${urgentCount} urgent)` : ''}?`,
+    'Send Weekly Digest',
+    `${active.length} active items${overdueCount ? ` · ${overdueCount} overdue` : ''}${dueThisWeekCount ? ` · ${dueThisWeekCount} due this week` : ''}`,
     null, sendDigest, 'Send'
   );
 });
