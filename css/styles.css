@@ -633,24 +633,35 @@ main { padding: 16px 0; min-height: 60vh; }
 .action-btn.urgent-btn:hover { color: var(--danger); background: var(--danger-bg); }
 
 /* ═══ DUE DATE ═══ */
-.capture-due-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 12px; background: var(--bg-surface);
-  border: 1px solid var(--border); border-radius: var(--radius);
+.review-due-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0; margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
 }
-.capture-due-label {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 13px; color: var(--text-muted); font-weight: 500;
+.review-due-label {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
   white-space: nowrap;
 }
-.capture-due-label svg { fill: currentColor; flex: 0 0 auto; }
-.capture-due-input {
-  flex: 1; padding: 6px 10px; border: 1px solid var(--border);
-  border-radius: 6px; font-family: var(--font); font-size: 13px;
+.review-due-label svg { fill: currentColor; flex: 0 0 auto; }
+.review-due-input {
+  padding: 5px 8px; border: 1px solid var(--border);
+  border-radius: 6px; font-family: var(--font); font-size: 12px;
   color: var(--text); background: var(--bg); outline: none;
-  max-width: 180px;
+  max-width: 150px;
 }
-.capture-due-input:focus { border-color: var(--accent); }
+.review-due-input:focus { border-color: var(--accent); }
+.review-due-clear {
+  width: 20px; height: 20px; border-radius: 50%; border: none;
+  background: var(--bg-hover); color: var(--text-muted);
+  cursor: pointer; font-size: 12px; display: flex;
+  align-items: center; justify-content: center;
+  transition: all var(--transition);
+}
+.review-due-clear:hover { background: var(--danger-bg); color: var(--danger); }
+.review-due-none { font-size: 11px; color: var(--text-muted); font-style: italic; }
 
 .due-tag {
   display: inline-block; font-size: 11px; font-weight: 600;
