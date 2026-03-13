@@ -632,6 +632,40 @@ main { padding: 16px 0; min-height: 60vh; }
 .action-btn.urgent-btn.active { color: var(--danger); background: var(--danger-bg); }
 .action-btn.urgent-btn:hover { color: var(--danger); background: var(--danger-bg); }
 
+/* ═══ DUE DATE ═══ */
+.capture-due-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; background: var(--bg-surface);
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+.capture-due-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--text-muted); font-weight: 500;
+  white-space: nowrap;
+}
+.capture-due-label svg { fill: currentColor; flex: 0 0 auto; }
+.capture-due-input {
+  flex: 1; padding: 6px 10px; border: 1px solid var(--border);
+  border-radius: 6px; font-family: var(--font); font-size: 13px;
+  color: var(--text); background: var(--bg); outline: none;
+  max-width: 180px;
+}
+.capture-due-input:focus { border-color: var(--accent); }
+
+.due-tag {
+  display: inline-block; font-size: 11px; font-weight: 600;
+  padding: 1px 6px; border-radius: 4px;
+  background: var(--bg-hover); color: var(--text-muted);
+}
+.due-tag.overdue { background: var(--danger-bg); color: var(--danger); }
+.due-tag.due-today { background: var(--danger-bg); color: var(--danger); font-weight: 700; }
+.due-tag.due-soon { background: rgba(255,139,0,0.1); color: #FF8B00; }
+
+/* ═══ DONE BUTTON ═══ */
+.action-btn.done-btn { opacity: 0.5; }
+.action-btn.done-btn:hover { opacity: 1; color: var(--success); background: var(--success-bg); }
+.action-btn.done-btn svg { width: 16px; height: 16px; fill: currentColor; }
+
 /* ═══ RESPONSIVE ═══ */
 @media (max-width: 600px) {
   nav.desktop-nav { display: none; }
