@@ -10,7 +10,7 @@ const THEME_KEY        = 'trigpoint_v2_theme';
 const ACTIVE_ACCOUNT_KEY = 'trigpoint_v2_account';
 
 const DEFAULT_ACCOUNTS   = [{ name: 'Personal', color: '#0033CC' }, { name: 'Work', color: '#00875A' }];
-const DEFAULT_CATEGORIES = ['note', 'task', 'news', 'opp'];
+const DEFAULT_CATEGORIES = ['strategic', 'operational', 'reactive', 'waiting', 'twain', 'personal'];
 
 const CAT_PALETTE = [
   { color: '#0033CC', bg: 'rgba(0,51,204,0.08)' },
@@ -1479,15 +1479,24 @@ function buildDigestHtml() {
 
   const active = data.items.filter(i => !i._deleted && !i._done);
   const completedRecently = data.items.filter(i => !i._deleted && i._done && i.completedAt && new Date(i.completedAt) >= weekAgo);
-  const accounts = data.accounts.filter(a =>
-    active.some(i => i.account === a.name) || completedRecently.some(i => i.account === a.name)
-  );
 
-  // Categorise active items
+  // Categorise active items by time
   const overdue = active.filter(i => i.dueDate && new Date(i.dueDate + 'T23:59:59') < today);
   const dueThisWeek = active.filter(i => i.dueDate && new Date(i.dueDate + 'T00:00:00') >= today && new Date(i.dueDate + 'T00:00:00') < weekFromNow);
   const noDueDate = active.filter(i => !i.dueDate);
   const dueLater = active.filter(i => i.dueDate && new Date(i.dueDate + 'T00:00:00') >= weekFromNow);
+
+  // Work type display config — order defines digest grouping priority
+  const WORK_TYPES = [
+    { key: 'twain',       label: 'Eat the Frog',  color: '#DE350B', bg: '#fde8e4' },
+    { key: 'strategic',   label: 'Strategic',      color: '#0033CC', bg: '#e6edff' },
+    { key: 'operational', label: 'Operational',    color: '#00875A', bg: '#e3fcef' },
+    { key: 'reactive',    label: 'Reactive',       color: '#FF8B00', bg: '#fff4e5' },
+    { key: 'waiting',     label: 'Waiting On',     color: '#6554C0', bg: '#eae6ff' },
+    { key: 'personal',    label: 'Personal',       color: '#00A3BF', bg: '#e6fcff' },
+  ];
+  const wtMap = new Map(WORK_TYPES.map(w => [w.key, w]));
+  function getWt(cat) { return wtMap.get(cat) || { key: cat || 'unfiled', label: cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : 'Unfiled', color: '#888', bg: '#f0f0f0' }; }
 
   const styles = `body{font-family:Arial,sans-serif;font-size:14px;color:#111;background:#f5f5f5;padding:20px;max-width:640px;margin:0 auto;}
 h1{font-size:20px;font-weight:700;margin-bottom:4px;color:#0033CC;}
@@ -1499,6 +1508,9 @@ h1{font-size:20px;font-weight:700;margin-bottom:4px;color:#0033CC;}
 .section-title.completed{color:#00875A;}
 .section-title.upcoming{color:#888;}
 .section-title.no-date{color:#888;}
+.wt-group{margin-bottom:16px;}
+.wt-group:last-child{margin-bottom:0;}
+.wt-header{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:6px 10px;border-radius:4px;margin-bottom:6px;}
 table{width:100%;border-collapse:collapse;}
 th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:#888;padding:6px 8px;border-bottom:1px solid #ddd;}
 td{padding:8px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top;}
@@ -1538,6 +1550,31 @@ tr:last-child td{border-bottom:none;}
       items.map(i => renderRow(i, showDue)).join('') + '</tbody></table>';
   };
 
+  // Group items by work type, ordered by WORK_TYPES priority, with sub-headers
+  const renderGrouped = (items, showDue = true, showCompleted = false) => {
+    if (!items.length) return '<p class="empty">None</p>';
+    // Build groups in WORK_TYPES order, then any remaining
+    const grouped = new Map();
+    WORK_TYPES.forEach(wt => { const g = items.filter(i => i.category === wt.key); if (g.length) grouped.set(wt.key, g); });
+    const assigned = new Set(WORK_TYPES.map(w => w.key));
+    const other = items.filter(i => !assigned.has(i.category));
+    if (other.length) grouped.set('_other', other);
+
+    if (grouped.size === 1) {
+      // Single group — show header but no need for extra nesting
+      const [key, group] = [...grouped.entries()][0];
+      const wt = key === '_other' ? getWt('') : getWt(key);
+      return `<div class="wt-group"><div class="wt-header" style="background:${wt.bg};color:${wt.color};">${wt.label} · ${group.length}</div>${renderTable(group, showDue, showCompleted)}</div>`;
+    }
+
+    let out = '';
+    for (const [key, group] of grouped) {
+      const wt = key === '_other' ? getWt('') : getWt(key);
+      out += `<div class="wt-group"><div class="wt-header" style="background:${wt.bg};color:${wt.color};">${wt.label} · ${group.length}</div>${renderTable(group, showDue, showCompleted)}</div>`;
+    }
+    return out;
+  };
+
   let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${styles}</style></head><body>`;
   html += `<h1>TrigPoint Weekly Digest</h1>`;
   html += `<p class="meta">${now.toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}</p>`;
@@ -1554,30 +1591,30 @@ tr:last-child td{border-bottom:none;}
   if (overdue.length) {
     html += `<div class="section"><div class="section-title overdue">⚠ Overdue<span class="count">(${overdue.length})</span></div>`;
     overdue.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-    html += renderTable(overdue);
+    html += renderGrouped(overdue);
     html += `</div>`;
   }
 
   // Due this week
   html += `<div class="section"><div class="section-title this-week">Due This Week<span class="count">(${dueThisWeek.length})</span></div>`;
   dueThisWeek.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-  html += renderTable(dueThisWeek);
+  html += renderGrouped(dueThisWeek);
   html += `</div>`;
 
   // Completed recently
   if (completedRecently.length) {
     html += `<div class="section"><div class="section-title completed">Completed This Week<span class="count">(${completedRecently.length})</span></div>`;
     completedRecently.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
-    html += renderTable(completedRecently, false, true);
+    html += renderGrouped(completedRecently, false, true);
     html += `</div>`;
   }
 
-  // Items with no due date (inbox/operational)
+  // Items with no due date
   if (noDueDate.length) {
     html += `<div class="section"><div class="section-title no-date">No Due Date<span class="count">(${noDueDate.length})</span></div>`;
     const urgentNoDue = noDueDate.filter(i => i._urgent);
     const normalNoDue = noDueDate.filter(i => !i._urgent);
-    html += renderTable([...urgentNoDue, ...normalNoDue], false);
+    html += renderGrouped([...urgentNoDue, ...normalNoDue], false);
     html += `</div>`;
   }
 
@@ -1585,7 +1622,7 @@ tr:last-child td{border-bottom:none;}
   if (dueLater.length) {
     html += `<div class="section"><div class="section-title upcoming">Upcoming<span class="count">(${dueLater.length})</span></div>`;
     dueLater.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-    html += renderTable(dueLater);
+    html += renderGrouped(dueLater);
     html += `</div>`;
   }
 
