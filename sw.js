@@ -1,5 +1,5 @@
 // TrigPoint Service Worker
-const CACHE = 'trigpoint-v2.4';
+const CACHE = 'trigpoint-v2.5';
 const ASSETS = [
   '/',
   '/index.html',
