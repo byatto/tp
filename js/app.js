@@ -877,6 +877,19 @@ function renderBrowse() {
     });
   });
 
+  // Text editing in browse cards
+  list.querySelectorAll('textarea.card-text-edit').forEach(el => {
+    autosize(el);
+    el.addEventListener('input', () => autosize(el));
+    el.addEventListener('blur', () => {
+      const item = data.items.find(i => i.id === el.dataset.id);
+      if (item && item.text !== el.value.trim()) {
+        updateItem(el.dataset.id, { text: el.value.trim() });
+        toast('Updated');
+      }
+    });
+  });
+
   // Due date change — inline update (no full re-render)
   list.querySelectorAll('.review-due-input').forEach(el => {
     el.addEventListener('change', () => {
@@ -973,9 +986,10 @@ function renderBrowseCard(item) {
     <div class="card ${item._urgent ? 'urgent' : ''}" data-id="${esc(item.id)}">
       <div class="card-swipe-delete">${trashSVG()}<span>Delete</span></div>
       <div class="card-inner">
-        <div class="card-text">
-          <span class="cat-badge" style="${badgeStyle}">${catLabel}</span>${escHtml(item.text)}
+        <div class="card-text-header">
+          <span class="cat-badge" style="${badgeStyle}">${catLabel}</span>
         </div>
+        <textarea class="card-text-edit" data-id="${esc(item.id)}">${escTextarea(item.text)}</textarea>
         <div class="review-due-row">
           <label class="review-due-label">
             <svg viewBox="0 0 24 24" width="13" height="13"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" fill="currentColor"/></svg>
