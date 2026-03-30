@@ -1,7 +1,7 @@
 {
   "name": "TrigPoint",
   "short_name": "TrigPoint",
-  "description": "Capture, review, and retrieve — a fast GTD inbox for your accounts",
+  "description": "Capture, review, and focus — task management with weekly reviews and Three Critical Things",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FAFAFA",

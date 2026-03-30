@@ -1,5 +1,5 @@
-// TrigPoint Service Worker
-const CACHE = 'trigpoint-v2.5';
+// TrigPoint Service Worker v3
+const CACHE = 'trigpoint-v3.0';
 const ASSETS = [
   '/',
   '/index.html',
@@ -25,7 +25,6 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Cache-first for app assets, network-first for fonts/external
   if (e.request.url.includes('fonts.googleapis') || e.request.url.includes('fonts.gstatic')) {
     e.respondWith(
       caches.open(CACHE).then(cache =>
