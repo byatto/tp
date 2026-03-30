@@ -4,21 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>TrigPoint</title>
-
-<!-- PWA manifest -->
 <link rel="manifest" href="manifest.json">
-
-<!-- iOS PWA -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="TrigPoint">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-
-<!-- Android / Chrome -->
 <meta name="theme-color" content="#0033CC">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="application-name" content="TrigPoint">
-
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='16' fill='%230033CC'/%3E%3Cpath d='M50 20 L75 70 L25 70 Z' fill='none' stroke='white' stroke-width='6'/%3E%3Ccircle cx='50' cy='52' r='5' fill='white'/%3E%3C/svg%3E" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -52,7 +45,6 @@
         <button data-view="review">Review <span class="badge hidden" id="badge-desk">0</span></button>
         <button data-view="browse">Browse</button>
       </nav>
-      <!-- Gear icon: opens settings panel -->
       <button class="icon-btn-header" id="settings-btn" title="Settings">
         <svg viewBox="0 0 24 24">
           <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
@@ -61,10 +53,17 @@
     </div>
   </header>
 
+  <!-- REVIEW BANNER -->
+  <div class="review-banner hidden" id="review-banner">
+    <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="currentColor"/></svg>
+    <span id="review-banner-text">Time for a weekly review</span>
+    <button class="review-banner-btn" id="review-banner-start">Start</button>
+    <button class="review-banner-snooze" id="review-banner-snooze" title="Snooze 24h">Later</button>
+  </div>
+
   <main>
     <!-- CAPTURE -->
     <section id="view-capture" class="capture-view">
-      <!-- Account indicator: shows which account you're capturing into -->
       <div class="capture-account-indicator" id="capture-account-indicator">
         <span class="indicator-dot" id="indicator-dot"></span>
         <span class="indicator-label" id="indicator-label">Personal</span>
@@ -75,13 +74,12 @@
       <p class="capture-hint">Press Enter to save · Shift+Enter for new line</p>
     </section>
 
-    <!-- REVIEW -->
+    <!-- REVIEW (inbox triage) -->
     <section id="view-review" class="hidden">
       <div class="view-header">
         <h2 class="view-title">Review</h2>
         <span class="view-count" id="review-count">0 items</span>
       </div>
-      <!-- Cross-account inbox notice -->
       <div class="cross-account-notice hidden" id="cross-account-notice">
         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
         <span class="cross-account-text"></span>
@@ -90,7 +88,7 @@
       <div id="review-list"></div>
     </section>
 
-    <!-- BROWSE (formerly Retrieve) -->
+    <!-- BROWSE -->
     <section id="view-browse" class="hidden">
       <div class="search-bar">
         <div class="search-wrap" id="search-wrap">
@@ -98,8 +96,8 @@
           <button class="search-clear" id="search-clear">×</button>
         </div>
         <select class="sort-select" id="sort-select">
-          <option value="newest">Newest</option>
-          <option value="oldest">Oldest</option>
+          <option value="age">Oldest first</option>
+          <option value="newest">Newest first</option>
           <option value="due">Due date</option>
         </select>
       </div>
@@ -111,9 +109,14 @@
         <span class="all-accounts-label" id="all-accounts-label"></span>
       </div>
       <div class="filter-bar" id="filter-bar">
-        <button class="filter-btn active" data-cat="all">All</button>
+        <button class="filter-btn active" data-type="all">All</button>
       </div>
       <div id="browse-list"></div>
+    </section>
+
+    <!-- WEEKLY REVIEW -->
+    <section id="view-weekly-review" class="hidden">
+      <div id="wr-content"></div>
     </section>
   </main>
 </div>
@@ -145,8 +148,13 @@
       <span class="settings-panel-title">Settings</span>
       <button class="settings-panel-close" id="settings-panel-close">×</button>
     </div>
-
-    <!-- Sync status -->
+    <div class="settings-group">
+      <div class="settings-group-label">Weekly Review</div>
+      <div class="settings-row">
+        <button class="subtle-btn accent" id="start-weekly-review-btn">Start Weekly Review</button>
+        <span class="settings-review-meta" id="settings-review-meta"></span>
+      </div>
+    </div>
     <div class="settings-group">
       <div class="settings-group-label">Sync</div>
       <div class="sync-row">
@@ -159,18 +167,13 @@
       </div>
       <div class="stats-text" id="stats-text"></div>
     </div>
-
-    <!-- Preferences -->
     <div class="settings-group">
       <div class="settings-group-label">Preferences</div>
       <div class="settings-row">
-        <button class="subtle-btn" id="categories-btn">Categories</button>
         <button class="subtle-btn" id="colours-btn">Account colours</button>
         <button class="subtle-btn" id="digest-btn">Send digest</button>
       </div>
     </div>
-
-    <!-- Data -->
     <div class="settings-group">
       <div class="settings-group-label">Data</div>
       <div class="settings-row">
@@ -215,7 +218,6 @@
 
 <script src="js/app.js"></script>
 <script>
-  // Register service worker for PWA / offline support
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
