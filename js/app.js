@@ -1,40 +1,78 @@
 // ═══════════════════════════════════════════════════════════
-// TRIGPOINT v2.3 — app.js
-// Additions: due dates, mark done, improved digest
+// TRIGPOINT v3.0 — app.js
+// Types replace categories, TCT replaces urgent, age-based
+// urgency, weekly review mode
 // ═══════════════════════════════════════════════════════════
 
-const STORAGE_KEY      = 'trigpoint_v2_data';
-const CLOUD_URL_KEY    = 'trigpoint_v2_cloud_url';
-const CLOUD_KEY_KEY    = 'trigpoint_v2_cloud_key';
-const THEME_KEY        = 'trigpoint_v2_theme';
+const STORAGE_KEY        = 'trigpoint_v2_data';
+const CLOUD_URL_KEY      = 'trigpoint_v2_cloud_url';
+const CLOUD_KEY_KEY      = 'trigpoint_v2_cloud_key';
+const THEME_KEY          = 'trigpoint_v2_theme';
 const ACTIVE_ACCOUNT_KEY = 'trigpoint_v2_account';
+const LAST_REVIEW_KEY    = 'trigpoint_v3_last_review';
+const REVIEW_SNOOZE_KEY  = 'trigpoint_v3_review_snooze';
+const MIGRATED_KEY       = 'trigpoint_v3_migrated';
 
-const DEFAULT_ACCOUNTS   = [{ name: 'Personal', color: '#0033CC' }, { name: 'Work', color: '#00875A' }];
-const DEFAULT_CATEGORIES = ['strategic', 'operational', 'reactive', 'waiting', 'twain', 'personal'];
+const DEFAULT_ACCOUNTS = [{ name: 'Personal', color: '#0033CC' }, { name: 'Work', color: '#00875A' }];
+const DEFAULT_TYPES    = ['action', 'waiting', 'project', 'note', 'someday'];
 
-const CAT_PALETTE = [
-  { color: '#0033CC', bg: 'rgba(0,51,204,0.08)' },
-  { color: '#00875A', bg: 'rgba(0,135,90,0.08)' },
-  { color: '#6554C0', bg: 'rgba(101,84,192,0.08)' },
-  { color: '#FF8B00', bg: 'rgba(255,139,0,0.08)' },
-  { color: '#DE350B', bg: 'rgba(222,53,11,0.08)' },
-  { color: '#00A3BF', bg: 'rgba(0,163,191,0.08)' },
-];
-const CAT_PALETTE_DARK = [
-  { color: '#4D7CFF', bg: 'rgba(77,124,255,0.12)' },
-  { color: '#36B37E', bg: 'rgba(54,179,126,0.12)' },
-  { color: '#998DD9', bg: 'rgba(153,141,217,0.12)' },
-  { color: '#FFAB00', bg: 'rgba(255,171,0,0.12)' },
-  { color: '#FF5630', bg: 'rgba(255,86,48,0.12)' },
-  { color: '#00B8D9', bg: 'rgba(0,184,217,0.12)' },
+const TYPE_CONFIG = [
+  { key: 'action',  label: 'Action',  color: '#0033CC', bg: 'rgba(0,51,204,0.08)',   darkColor: '#4D7CFF', darkBg: 'rgba(77,124,255,0.12)' },
+  { key: 'waiting', label: 'Waiting', color: '#6554C0', bg: 'rgba(101,84,192,0.08)', darkColor: '#998DD9', darkBg: 'rgba(153,141,217,0.12)' },
+  { key: 'project', label: 'Project', color: '#00875A', bg: 'rgba(0,135,90,0.08)',   darkColor: '#36B37E', darkBg: 'rgba(54,179,126,0.12)' },
+  { key: 'note',    label: 'Note',    color: '#FF8B00', bg: 'rgba(255,139,0,0.08)',   darkColor: '#FFAB00', darkBg: 'rgba(255,171,0,0.12)' },
+  { key: 'someday', label: 'Someday', color: '#00A3BF', bg: 'rgba(0,163,191,0.08)',   darkColor: '#00B8D9', darkBg: 'rgba(0,184,217,0.12)' },
 ];
 
-function getCatStyle(cat) {
-  if (!cat) return { color: 'var(--text-muted)', bg: 'var(--bg-hover)' };
-  const idx = data.categories.indexOf(cat);
-  const i = idx >= 0 ? idx : 0;
+function getTypeStyle(type) {
+  const cfg = TYPE_CONFIG.find(t => t.key === type);
+  if (!cfg) return { color: 'var(--text-muted)', bg: 'var(--bg-hover)', label: type || 'Inbox' };
   const isDark = document.body.getAttribute('data-theme') === 'dark';
-  return (isDark ? CAT_PALETTE_DARK : CAT_PALETTE)[i % CAT_PALETTE.length];
+  return { color: isDark ? cfg.darkColor : cfg.color, bg: isDark ? cfg.darkBg : cfg.bg, label: cfg.label };
+}
+
+// ═══ MIGRATION v2 → v3 ═══
+function migrateV2toV3(d) {
+  if (localStorage.getItem(MIGRATED_KEY)) return d;
+
+  const catMap = {
+    strategic: 'action', operational: 'action', reactive: 'action',
+    waiting: 'waiting', twain: 'action', personal: 'action',
+    note: 'note', task: 'action', Task: 'action'
+  };
+
+  d.items.forEach(item => {
+    // Map category → type
+    if (item.category !== undefined && item.type === undefined) {
+      item.type = catMap[item.category] || (item.category ? 'action' : '');
+    }
+    // Rename _urgent → _tct
+    if (item._urgent !== undefined && item._tct === undefined) {
+      item._tct = item._urgent;
+      delete item._urgent;
+    }
+    if (item._tct === undefined) item._tct = false;
+    if (item.type === undefined) item.type = '';
+  });
+
+  // Replace categories with types
+  d.types = DEFAULT_TYPES;
+
+  // Merge duplicate accounts (e.g. DSTL and dstl)
+  const seen = new Map();
+  d.accounts.forEach(acc => {
+    const lower = acc.name.toLowerCase();
+    if (!seen.has(lower)) { seen.set(lower, acc); }
+    else {
+      // Merge: reassign items from duplicate to canonical
+      const canonical = seen.get(lower);
+      d.items.forEach(item => { if (item.account === acc.name) item.account = canonical.name; });
+    }
+  });
+  d.accounts = Array.from(seen.values());
+
+  localStorage.setItem(MIGRATED_KEY, 'true');
+  return d;
 }
 
 // ═══ STATE ═══
@@ -55,17 +93,18 @@ function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const d = JSON.parse(raw);
-      if (!Array.isArray(d.items))      d.items      = [];
-      if (!Array.isArray(d.accounts))   d.accounts   = DEFAULT_ACCOUNTS;
-      if (!Array.isArray(d.categories)) d.categories = DEFAULT_CATEGORIES;
+      let d = JSON.parse(raw);
+      if (!Array.isArray(d.items))    d.items    = [];
+      if (!Array.isArray(d.accounts)) d.accounts = DEFAULT_ACCOUNTS;
+      if (!Array.isArray(d.types))    d.types    = DEFAULT_TYPES;
       d.items = d.items.filter(i => i && typeof i.id === 'string' && typeof i.text === 'string');
       d.items.forEach(i => {
         if (!i.createdAt) i.createdAt = new Date().toISOString();
         if (!i.account)   i.account   = d.accounts[0]?.name || 'Personal';
-        if (!i.category)  i.category  = '';
-        if (!i.status)    i.status    = 'inbox';
+        if (i.type === undefined) i.type = i.category || '';
+        if (!i.status) i.status = 'inbox';
         if (i._done === undefined) i._done = false;
+        if (i._tct === undefined) i._tct = i._urgent || false;
         if (i.dueDate === undefined) i.dueDate = null;
         if (i.completedAt === undefined) i.completedAt = null;
       });
@@ -75,10 +114,11 @@ function loadData() {
         if (!i._deletedAt) return false;
         return new Date(i._deletedAt).getTime() > cutoff;
       });
+      d = migrateV2toV3(d);
       return d;
     }
   } catch (e) { console.error('Load error:', e); }
-  return { items: [], accounts: DEFAULT_ACCOUNTS, categories: DEFAULT_CATEGORIES };
+  return { items: [], accounts: DEFAULT_ACCOUNTS, types: DEFAULT_TYPES };
 }
 
 function saveData() {
@@ -91,25 +131,11 @@ let cloudUrl  = localStorage.getItem(CLOUD_URL_KEY) || '';
 let cloudKey  = localStorage.getItem(CLOUD_KEY_KEY) || '';
 let syncTimeout = null;
 let isSyncing = false;
-const DEBUG_SYNC = false;
-
-function debugLog(msg, d) { if (DEBUG_SYNC) console.log('[TrigPoint]', msg, d || ''); }
-function showDebugToast(msg) {
-  if (!DEBUG_SYNC) return;
-  const existing = document.getElementById('debug-toast');
-  if (existing) existing.remove();
-  const div = document.createElement('div');
-  div.id = 'debug-toast';
-  div.style.cssText = 'position:fixed;top:10px;left:10px;right:10px;background:#333;color:#fff;padding:12px;border-radius:8px;font-size:12px;z-index:9999;font-family:monospace;white-space:pre-wrap;max-height:40vh;overflow:auto;';
-  div.textContent = msg;
-  div.onclick = () => div.remove();
-  document.body.appendChild(div);
-}
 
 function setSyncStatus(status) {
   const dot = document.getElementById('sync-dot');
   const label = document.getElementById('sync-label');
-  if (!dot || !label) return; // Panel not open / not in DOM yet — skip safely
+  if (!dot || !label) return;
   dot.className = 'sync-dot';
   if (status === 'syncing') { dot.classList.add('syncing'); label.textContent = 'Syncing…'; }
   else if (status === 'online') { dot.classList.add('online'); label.textContent = 'Synced'; }
@@ -151,9 +177,6 @@ async function pullFromCloud() {
           data.accounts.push(typeof acc === 'string' ? { name: acc, color: '#888' } : acc);
       });
     }
-    if (Array.isArray(cloud.categories)) {
-      cloud.categories.forEach(cat => { if (!data.categories.includes(cat)) data.categories.push(cat); });
-    }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     renderAll(); setSyncStatus('online');
@@ -166,7 +189,7 @@ async function pushToCloud() {
   if (!cloudUrl || isSyncing) return;
   try {
     setSyncStatus('syncing');
-    const payload = { key: cloudKey, items: data.items, accounts: data.accounts.map(a => a.name), categories: data.categories };
+    const payload = { key: cloudKey, items: data.items, accounts: data.accounts.map(a => a.name), types: data.types };
     const res  = await fetch(cloudUrl, { method: 'POST', redirect: 'follow', body: JSON.stringify(payload) });
     const text = await res.text();
     const result = JSON.parse(text);
@@ -176,16 +199,15 @@ async function pushToCloud() {
 }
 
 document.addEventListener('visibilitychange', () => { if (!document.hidden && cloudUrl) pullFromCloud(); });
-// Defer sync init until DOM is fully ready
 if (cloudUrl) { setTimeout(pullFromCloud, 500); } else { setTimeout(() => setSyncStatus('offline'), 0); }
 
 // ═══ ITEM OPERATIONS ═══
 function addItem(text) {
   const item = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    text: text.trim(), account: activeAccount, category: '', status: 'inbox',
+    text: text.trim(), account: activeAccount, type: '', status: 'inbox',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    _urgent: false, _deleted: false, _done: false,
+    _tct: false, _deleted: false, _done: false,
     dueDate: null, completedAt: null
   };
   data.items.unshift(item);
@@ -209,7 +231,7 @@ function deleteItem(id) {
 function markDone(id) {
   const item = data.items.find(i => i.id === id);
   if (item) {
-    item._done = true;
+    item._done = true; item._tct = false;
     item.completedAt = new Date().toISOString();
     item.updatedAt = new Date().toISOString();
     saveData();
@@ -233,24 +255,71 @@ function restoreItem(item) {
 
 function getInboxItems(account) {
   const acc = account || activeAccount;
-  return data.items.filter(i => i.account === acc && i.status === 'inbox' && !i.category && !i._deleted && !i._done);
+  return data.items.filter(i => i.account === acc && i.status === 'inbox' && !i.type && !i._deleted && !i._done);
 }
 
 function getAllInboxCount() {
-  return data.items.filter(i => i.status === 'inbox' && !i.category && !i._deleted && !i._done).length;
+  return data.items.filter(i => i.status === 'inbox' && !i.type && !i._deleted && !i._done).length;
 }
 
-function searchItems(query, category, sort) {
-  let results = data.items.filter(i => !i._deleted && !i._done);
+function getActiveItems() {
+  return data.items.filter(i => !i._deleted && !i._done);
+}
+
+function getTCTCount() {
+  return getActiveItems().filter(i => i._tct).length;
+}
+
+function toggleTCT(id) {
+  const item = data.items.find(i => i.id === id);
+  if (!item) return false;
+  if (item._tct) { item._tct = false; saveData(); return true; }
+  if (getTCTCount() >= 3) return false;
+  if (item.type === 'note' || item.type === 'someday') return false;
+  item._tct = true; saveData(); return true;
+}
+
+// ═══ AGE HELPERS ═══
+function getAgeDays(createdAt) {
+  const now = new Date();
+  const created = new Date(createdAt);
+  return Math.floor((now - created) / 86400000);
+}
+
+function getAgeLabel(days) {
+  if (days === 0) return 'today';
+  if (days === 1) return '1d';
+  return days + 'd';
+}
+
+function getAgeClass(item) {
+  if (item.type === 'note' || item.type === 'someday') return '';
+  const days = getAgeDays(item.createdAt);
+  if (item.dueDate) {
+    const due = new Date(item.dueDate + 'T23:59:59');
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (due < today) return 'overdue';
+    const diff = Math.floor((due - today) / 86400000);
+    if (diff <= 3) return 'due-soon';
+    return '';
+  }
+  if (days >= 28) return 'stale-red';
+  if (days >= 14) return 'stale-amber';
+  return '';
+}
+
+function searchItems(query, typeFilter, sort) {
+  let results = getActiveItems();
   if (!allAccounts) results = results.filter(i => i.account === activeAccount);
-  if (category === 'inbox') results = results.filter(i => !i.category);
-  else if (category && category !== 'all') results = results.filter(i => i.category === category);
+  if (typeFilter === 'inbox') results = results.filter(i => !i.type);
+  else if (typeFilter && typeFilter !== 'all') results = results.filter(i => i.type === typeFilter);
   if (query) {
     const q = query.toLowerCase();
     results = results.filter(i =>
       i.text.toLowerCase().includes(q) ||
       (i.account && i.account.toLowerCase().includes(q)) ||
-      (i.category && i.category.toLowerCase().includes(q))
+      (i.type && i.type.toLowerCase().includes(q))
     );
   }
   if (sort === 'due') {
@@ -258,10 +327,17 @@ function searchItems(query, category, sort) {
       if (a.dueDate && b.dueDate) return new Date(a.dueDate) - new Date(b.dueDate);
       if (a.dueDate) return -1;
       if (b.dueDate) return 1;
-      return new Date(b.createdAt) - new Date(a.createdAt);
+      return new Date(a.createdAt) - new Date(b.createdAt);
+    });
+  } else if (sort === 'age') {
+    // TCT first, then oldest first
+    results.sort((a, b) => {
+      if (a._tct && !b._tct) return -1;
+      if (!a._tct && b._tct) return 1;
+      return new Date(a.createdAt) - new Date(b.createdAt);
     });
   } else {
-    results.sort((a, b) => sort === 'oldest' ? new Date(a.createdAt) - new Date(b.createdAt) : new Date(b.createdAt) - new Date(a.createdAt));
+    results.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
   return results;
 }
@@ -282,12 +358,10 @@ document.getElementById('theme-toggle').addEventListener('click', () => applyThe
 // ═══ ACCOUNT SELECTOR ═══
 function renderAccountDropdown() {
   const dropdown = document.getElementById('account-dropdown');
-  if (!dropdown) return; // Header not in DOM yet — bail safely
+  if (!dropdown) return;
   const current  = data.accounts.find(a => a.name === activeAccount) || data.accounts[0];
-  const colour   = (current?.color && current.color !== '#888' && current.color !== '#888888')
-                    ? current.color : '#0033CC';
+  const colour   = (current?.color && current.color !== '#888' && current.color !== '#888888') ? current.color : '#0033CC';
 
-  // Lozenge: coloured dot + first initial
   const initial = (current?.name || activeAccount).charAt(0).toUpperCase();
   const lozengeInitial = document.getElementById('account-initial');
   const lozengeDot     = document.getElementById('account-dot');
@@ -296,7 +370,7 @@ function renderAccountDropdown() {
 
   dropdown.innerHTML = data.accounts.map(acc => {
     const inboxCount = getInboxItems(acc.name).length;
-    const totalCount = data.items.filter(i => i.account === acc.name && !i._deleted).length;
+    const totalCount = data.items.filter(i => i.account === acc.name && !i._deleted && !i._done).length;
     const countLabel = inboxCount > 0
       ? `<span class="account-option-count" style="background:var(--accent-glow);color:var(--accent)">${inboxCount} inbox</span>`
       : totalCount > 0
@@ -363,83 +437,66 @@ function setActiveAccount(name) {
 // ═══ TRASH VIEW ═══
 function openTrashView() {
   const deleted = data.items.filter(i => i._deleted);
-
   function purgeAll() {
     data.items = data.items.filter(i => !i._deleted);
-    saveData(); renderAll(); closeModal();
-    toast('Trash purged');
+    saveData(); renderAll(); closeModal(); toast('Trash purged');
   }
-
-  openModal(
-    'Trash',
-    `${deleted.length} deleted item${deleted.length !== 1 ? 's' : ''}`,
-    ct => {
-      function renderTrash() {
-        if (!deleted.length) {
-          ct.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px 0;">Trash is empty</p>';
-          // Hide Purge All button when empty
-          const confirmBtn = document.getElementById('modal-confirm');
-          if (confirmBtn) confirmBtn.classList.add('hidden');
-          return;
-        }
-
-        ct.innerHTML = `
-          <div style="max-height:45vh;overflow-y:auto;margin-bottom:8px;">
-            ${deleted.map(item => {
-              const acc = data.accounts.find(a => a.name === item.account);
-              const colour = acc ? acc.color : '#888';
-              const date = new Date(item._deletedAt || item.createdAt).toLocaleDateString('en-GB', { day:'numeric', month:'short' });
-              return `
-                <div style="padding:10px;border:1px solid var(--border-subtle);border-radius:6px;margin-bottom:8px;background:var(--bg-surface);">
-                  <div style="font-size:14px;line-height:1.5;margin-bottom:8px;color:var(--text-secondary);">${escHtml(item.text)}</div>
-                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                    <span style="font-size:11px;color:${colour};font-weight:600;">${escHtml(item.account)}</span>
-                    <span style="font-size:11px;color:var(--text-muted);">Deleted ${date}</span>
-                    <div style="display:flex;gap:6px;margin-left:auto;">
-                      <button class="subtle-btn trash-restore" data-id="${esc(item.id)}" style="font-size:11px;padding:4px 10px;">Restore</button>
-                      <button class="subtle-btn danger trash-purge-one" data-id="${esc(item.id)}" style="font-size:11px;padding:4px 10px;">Delete</button>
-                    </div>
-                  </div>
-                </div>`;
-            }).join('')}
-          </div>`;
-
-        ct.querySelectorAll('.trash-restore').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const item = data.items.find(i => i.id === btn.dataset.id);
-            if (item) { item._deleted = false; item._deletedAt = null; saveData(); renderAll(); }
-            const idx = deleted.findIndex(i => i.id === btn.dataset.id);
-            if (idx > -1) deleted.splice(idx, 1);
-            renderTrash();
-            document.getElementById('modal-title').textContent = `Trash · ${deleted.length} item${deleted.length !== 1 ? 's' : ''}`;
-            toast('Restored');
-          });
-        });
-
-        ct.querySelectorAll('.trash-purge-one').forEach(btn => {
-          btn.addEventListener('click', () => {
-            data.items = data.items.filter(i => i.id !== btn.dataset.id);
-            saveData(); renderAll();
-            const idx = deleted.findIndex(i => i.id === btn.dataset.id);
-            if (idx > -1) deleted.splice(idx, 1);
-            renderTrash();
-            document.getElementById('modal-title').textContent = `Trash · ${deleted.length} item${deleted.length !== 1 ? 's' : ''}`;
-          });
-        });
+  openModal('Trash', `${deleted.length} deleted item${deleted.length !== 1 ? 's' : ''}`, ct => {
+    function renderTrash() {
+      if (!deleted.length) {
+        ct.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px 0;">Trash is empty</p>';
+        const confirmBtn = document.getElementById('modal-confirm');
+        if (confirmBtn) confirmBtn.classList.add('hidden');
+        return;
       }
-      renderTrash();
-    },
-    deleted.length ? purgeAll : null,   // onConfirm
-    deleted.length ? 'Purge All' : 'Close',  // confirmText
-    deleted.length > 0   // danger styling
-  );
+      ct.innerHTML = `<div style="max-height:45vh;overflow-y:auto;margin-bottom:8px;">
+        ${deleted.map(item => {
+          const acc = data.accounts.find(a => a.name === item.account);
+          const colour = acc ? acc.color : '#888';
+          const date = new Date(item._deletedAt || item.createdAt).toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+          return `<div style="padding:10px;border:1px solid var(--border-subtle);border-radius:6px;margin-bottom:8px;background:var(--bg-surface);">
+            <div style="font-size:14px;line-height:1.5;margin-bottom:8px;color:var(--text-secondary);">${escHtml(item.text)}</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span style="font-size:11px;color:${colour};font-weight:600;">${escHtml(item.account)}</span>
+              <span style="font-size:11px;color:var(--text-muted);">Deleted ${date}</span>
+              <div style="display:flex;gap:6px;margin-left:auto;">
+                <button class="subtle-btn trash-restore" data-id="${esc(item.id)}" style="font-size:11px;padding:4px 10px;">Restore</button>
+                <button class="subtle-btn danger trash-purge-one" data-id="${esc(item.id)}" style="font-size:11px;padding:4px 10px;">Delete</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+      ct.querySelectorAll('.trash-restore').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const item = data.items.find(i => i.id === btn.dataset.id);
+          if (item) { item._deleted = false; item._deletedAt = null; saveData(); renderAll(); }
+          const idx = deleted.findIndex(i => i.id === btn.dataset.id);
+          if (idx > -1) deleted.splice(idx, 1);
+          renderTrash();
+          document.getElementById('modal-title').textContent = `Trash · ${deleted.length} item${deleted.length !== 1 ? 's' : ''}`;
+          toast('Restored');
+        });
+      });
+      ct.querySelectorAll('.trash-purge-one').forEach(btn => {
+        btn.addEventListener('click', () => {
+          data.items = data.items.filter(i => i.id !== btn.dataset.id);
+          saveData(); renderAll();
+          const idx = deleted.findIndex(i => i.id === btn.dataset.id);
+          if (idx > -1) deleted.splice(idx, 1);
+          renderTrash();
+          document.getElementById('modal-title').textContent = `Trash · ${deleted.length} item${deleted.length !== 1 ? 's' : ''}`;
+        });
+      });
+    }
+    renderTrash();
+  }, deleted.length ? purgeAll : null, deleted.length ? 'Purge All' : 'Close', deleted.length > 0);
 }
 
 document.getElementById('account-btn').addEventListener('click', e => {
   e.stopPropagation();
   document.getElementById('account-dropdown').classList.toggle('open');
 });
-
 document.addEventListener('click', e => {
   if (!e.target.closest('.account-selector')) document.getElementById('account-dropdown').classList.remove('open');
 });
@@ -447,12 +504,11 @@ document.addEventListener('click', e => {
 // ═══ CAPTURE ACCOUNT INDICATOR ═══
 function updateCaptureIndicator() {
   const acc    = data.accounts.find(a => a.name === activeAccount);
-  const colour = (acc?.color && acc.color !== '#888' && acc.color !== '#888888')
-                  ? acc.color : '#0033CC';
+  const colour = (acc?.color && acc.color !== '#888' && acc.color !== '#888888') ? acc.color : '#0033CC';
   const dot    = document.getElementById('indicator-dot');
   const label  = document.getElementById('indicator-label');
   const box    = document.getElementById('capture-account-indicator');
-  if (dot)   { dot.style.background = colour; dot.style.backgroundColor = colour; }
+  if (dot)   { dot.style.background = colour; }
   if (label) label.textContent = activeAccount;
   if (box)   box.style.borderColor = colour + '55';
 }
@@ -461,8 +517,9 @@ function updateCaptureIndicator() {
 function switchView(view) {
   currentView = view;
   if (view !== 'browse') allAccounts = false;
-  ['capture', 'review', 'browse'].forEach(v => {
-    document.getElementById('view-' + v).classList.toggle('hidden', v !== view);
+  ['capture', 'review', 'browse', 'weekly-review'].forEach(v => {
+    const el = document.getElementById('view-' + v);
+    if (el) el.classList.toggle('hidden', v !== view);
   });
   document.querySelectorAll('#nav-desktop button, #nav-mobile button').forEach(b => {
     b.classList.toggle('active', b.dataset.view === view);
@@ -493,14 +550,13 @@ captureInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doCapture(); }
 });
 
-// ═══ REVIEW RENDERING ═══
+// ═══ REVIEW RENDERING (inbox triage) ═══
 function renderReview() {
   const list  = document.getElementById('review-list');
   const items = getInboxItems();
 
   document.getElementById('review-count').textContent = items.length + ' items';
 
-  // Cross-account notice
   const crossNotice = document.getElementById('cross-account-notice');
   const allInbox = getAllInboxCount();
   const otherInbox = allInbox - getInboxItems().length;
@@ -509,18 +565,15 @@ function renderReview() {
       crossNotice.classList.remove('hidden');
       crossNotice.querySelector('.cross-account-text').textContent =
         `${otherInbox} item${otherInbox !== 1 ? 's' : ''} waiting in other accounts`;
-    } else {
-      crossNotice.classList.add('hidden');
-    }
+    } else { crossNotice.classList.add('hidden'); }
   }
 
   if (!items.length) {
-    list.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">✓</div>
-        <div class="empty-title">Inbox Clear</div>
-        <p>No items to review for ${escHtml(activeAccount)}</p>
-      </div>`;
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">✓</div>
+      <div class="empty-title">Inbox Clear</div>
+      <p>No items to review for ${escHtml(activeAccount)}</p>
+    </div>`;
     return;
   }
 
@@ -528,51 +581,31 @@ function renderReview() {
     const accOptions = data.accounts.map(a =>
       `<option value="${esc(a.name)}" ${a.name === item.account ? 'selected' : ''}>${escHtml(a.name)}</option>`
     ).join('');
-
     return `
     <div class="card" data-id="${esc(item.id)}">
+      <div class="card-swipe-delete">${trashSVG()}<span>Delete</span></div>
       <div class="card-inner">
         <textarea class="card-text-edit" data-id="${esc(item.id)}">${escTextarea(item.text)}</textarea>
-        <div class="cat-buttons">
-          ${data.categories.map(cat => {
-            const s = getCatStyle(cat);
-            const selected = item.category === cat;
+        <div class="type-buttons">
+          ${TYPE_CONFIG.map(t => {
+            const s = getTypeStyle(t.key);
+            const selected = item.type === t.key;
             const style = selected ? `background:${s.bg};color:${s.color};border-color:transparent;` : '';
-            return `<button class="cat-btn ${selected ? 'selected' : ''}" style="${style}" data-cat="${cat}" data-id="${esc(item.id)}">
-              ${cat.charAt(0).toUpperCase() + cat.slice(1)}
-            </button>`;
+            return `<button class="type-btn ${selected ? 'selected' : ''}" style="${style}" data-type="${t.key}" data-id="${esc(item.id)}">${t.label}</button>`;
           }).join('')}
         </div>
-        <div class="review-due-row">
-          <label class="review-due-label">
-            <svg viewBox="0 0 24 24" width="13" height="13"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" fill="currentColor"/></svg>
-            Due
-          </label>
-          <input type="date" class="review-due-input" data-id="${esc(item.id)}" value="${item.dueDate || ''}">
-          ${item.dueDate ? `<button class="review-due-clear" data-id="${esc(item.id)}" title="Clear due date">×</button>` : ''}
-          ${item.dueDate ? formatDueDate(item.dueDate) : '<span class="review-due-none">No date set</span>'}
-        </div>
-        <div class="file-confirm-row ${item.category ? 'visible' : ''}" id="confirm-row-${esc(item.id)}">
-          <button class="file-confirm-btn" data-id="${esc(item.id)}">
-            File as ${item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : ''} →
+        <div class="file-confirm-row ${item.type ? 'visible' : ''}" id="confirm-row-${esc(item.id)}">
+          <button class="file-confirm-btn" data-id="${esc(item.id)}" data-type="${item.type || ''}">
+            File as ${item.type ? getTypeStyle(item.type).label : ''} →
           </button>
           <button class="file-cancel-btn" data-id="${esc(item.id)}">Cancel</button>
         </div>
         <div class="card-footer">
-          <span class="card-meta">${item.dueDate ? formatDueDate(item.dueDate) : formatTime(item.createdAt)}</span>
+          <span class="card-meta">${formatTime(item.createdAt)}</span>
           <div class="card-actions">
-            <button class="action-btn done-btn" data-id="${esc(item.id)}" title="Mark done">
-              ${doneSVG()}
-            </button>
-            <button class="action-btn urgent-btn ${item._urgent ? 'active' : ''}" data-id="${esc(item.id)}" title="${item._urgent ? 'Remove urgent' : 'Mark urgent'}">
-              <span style="font-size:15px;font-weight:800;line-height:1;">!</span>
-            </button>
-            <button class="action-btn move" data-id="${esc(item.id)}" title="Move to account">
-              ${moveSVG()}
-            </button>
-            <button class="action-btn delete" data-action="delete" data-id="${esc(item.id)}" title="Delete">
-              ${trashSVG()}
-            </button>
+            <button class="action-btn done-btn" data-id="${esc(item.id)}" title="Mark done">${doneSVG()}</button>
+            <button class="action-btn move" data-id="${esc(item.id)}" title="Move to account">${moveSVG()}</button>
+            <button class="action-btn delete" data-action="delete" data-id="${esc(item.id)}" title="Delete">${trashSVG()}</button>
           </div>
         </div>
         <div class="reassign-panel" id="reassign-${esc(item.id)}">
@@ -584,32 +617,22 @@ function renderReview() {
     </div>`;
   }).join('');
 
-  // Category select — sets pending category, shows confirm row
-  list.querySelectorAll('.cat-btn').forEach(btn => {
+  // Type select
+  list.querySelectorAll('.type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const itemId = btn.dataset.id;
-      const cat = btn.dataset.cat;
+      const type = btn.dataset.type;
       const card = list.querySelector(`.card[data-id="${itemId}"]`);
       if (!card) return;
-
-      // Toggle selection on buttons
-      card.querySelectorAll('.cat-btn').forEach(b => {
-        b.classList.remove('selected');
-        b.removeAttribute('style');
-      });
-      const s = getCatStyle(cat);
+      card.querySelectorAll('.type-btn').forEach(b => { b.classList.remove('selected'); b.removeAttribute('style'); });
+      const s = getTypeStyle(type);
       btn.classList.add('selected');
       btn.style.cssText = `background:${s.bg};color:${s.color};border-color:transparent;`;
-
-      // Show/update confirm row
       const confirmRow = document.getElementById('confirm-row-' + itemId);
       if (confirmRow) {
         confirmRow.classList.add('visible');
         const confirmBtn = confirmRow.querySelector('.file-confirm-btn');
-        if (confirmBtn) {
-          confirmBtn.textContent = `File as ${cat.charAt(0).toUpperCase() + cat.slice(1)} →`;
-          confirmBtn.dataset.cat = cat;
-        }
+        if (confirmBtn) { confirmBtn.textContent = `File as ${s.label} →`; confirmBtn.dataset.type = type; }
       }
     });
   });
@@ -617,11 +640,10 @@ function renderReview() {
   // Confirm filing
   list.querySelectorAll('.file-confirm-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const cat = btn.dataset.cat;
-      const itemId = btn.dataset.id;
-      updateItem(itemId, { category: cat, status: 'stored' });
+      const type = btn.dataset.type;
+      updateItem(btn.dataset.id, { type, status: 'stored' });
       renderReview(); updateBadge(); updateStats();
-      toast('Filed as ' + cat.charAt(0).toUpperCase() + cat.slice(1));
+      toast('Filed as ' + getTypeStyle(type).label);
     });
   });
 
@@ -631,126 +653,14 @@ function renderReview() {
       const itemId = btn.dataset.id;
       const card = list.querySelector(`.card[data-id="${itemId}"]`);
       if (!card) return;
-      card.querySelectorAll('.cat-btn').forEach(b => { b.classList.remove('selected'); b.removeAttribute('style'); });
+      card.querySelectorAll('.type-btn').forEach(b => { b.classList.remove('selected'); b.removeAttribute('style'); });
       const confirmRow = document.getElementById('confirm-row-' + itemId);
       if (confirmRow) confirmRow.classList.remove('visible');
     });
   });
 
-  list.querySelectorAll('.action-btn.done-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const undoData = markDone(btn.dataset.id);
-      if (undoData) showUndoDone('Marked done ✓', undoData);
-      renderReview(); updateBadge(); updateStats();
-    });
-  });
+  wireCardActions(list, () => { renderReview(); updateBadge(); updateStats(); });
 
-  list.querySelectorAll('.action-btn.urgent-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const item = data.items.find(i => i.id === btn.dataset.id);
-      if (!item) return;
-      updateItem(btn.dataset.id, { _urgent: !item._urgent });
-      renderReview();
-      toast(item._urgent ? 'Urgent removed' : 'Marked urgent');
-    });
-  });
-
-  list.querySelectorAll('.action-btn.delete').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const removed = deleteItem(btn.dataset.id);
-      if (removed) showUndo('Deleted', removed);
-      renderReview(); updateBadge(); updateStats();
-    });
-  });
-
-  list.querySelectorAll('.action-btn.move').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const panel = document.getElementById('reassign-' + btn.dataset.id);
-      if (panel) { panel.classList.toggle('open'); btn.classList.toggle('open'); }
-    });
-  });
-
-  list.querySelectorAll('.reassign-save').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const sel = document.getElementById('reassign-sel-' + btn.dataset.id);
-      if (!sel) return;
-      updateItem(btn.dataset.id, { account: sel.value });
-      renderReview(); updateBadge();
-      toast('Moved to ' + sel.value);
-    });
-  });
-
-  list.querySelectorAll('textarea.card-text-edit').forEach(el => {
-    autosize(el);
-    el.addEventListener('input', () => autosize(el));
-    el.addEventListener('blur', () => {
-      const item = data.items.find(i => i.id === el.dataset.id);
-      if (item && item.text !== el.value.trim()) updateItem(el.dataset.id, { text: el.value.trim() });
-    });
-  });
-
-  // Due date change
-  // Due date change — update inline without re-rendering (preserves pending category selection)
-  list.querySelectorAll('.review-due-input').forEach(el => {
-    el.addEventListener('change', () => {
-      updateItem(el.dataset.id, { dueDate: el.value || null });
-      // Update the due tag and clear button inline instead of full re-render
-      const row = el.closest('.review-due-row');
-      if (row) {
-        // Remove old tag and clear button
-        row.querySelectorAll('.due-tag, .review-due-none, .review-due-clear').forEach(e => e.remove());
-        // Add new ones
-        if (el.value) {
-          const clearBtn = document.createElement('button');
-          clearBtn.className = 'review-due-clear';
-          clearBtn.dataset.id = el.dataset.id;
-          clearBtn.title = 'Clear due date';
-          clearBtn.textContent = '×';
-          clearBtn.addEventListener('click', () => {
-            updateItem(el.dataset.id, { dueDate: null });
-            el.value = '';
-            clearBtn.remove();
-            row.querySelectorAll('.due-tag').forEach(e => e.remove());
-            const none = document.createElement('span');
-            none.className = 'review-due-none';
-            none.textContent = 'No date set';
-            row.appendChild(none);
-            toast('Due date cleared');
-          });
-          row.appendChild(clearBtn);
-          const tagSpan = document.createElement('span');
-          tagSpan.innerHTML = formatDueDate(el.value);
-          row.appendChild(tagSpan.firstChild);
-        } else {
-          const none = document.createElement('span');
-          none.className = 'review-due-none';
-          none.textContent = 'No date set';
-          row.appendChild(none);
-        }
-      }
-      toast(el.value ? 'Due date set' : 'Due date cleared');
-    });
-  });
-
-  // Due date clear button
-  list.querySelectorAll('.review-due-clear').forEach(btn => {
-    btn.addEventListener('click', () => {
-      updateItem(btn.dataset.id, { dueDate: null });
-      const row = btn.closest('.review-due-row');
-      if (row) {
-        const input = row.querySelector('.review-due-input');
-        if (input) input.value = '';
-        row.querySelectorAll('.due-tag, .review-due-clear').forEach(e => e.remove());
-        const none = document.createElement('span');
-        none.className = 'review-due-none';
-        none.textContent = 'No date set';
-        row.appendChild(none);
-      }
-      toast('Due date cleared');
-    });
-  });
-
-  // Swipe-to-delete for review cards
   list.querySelectorAll('.card').forEach(card => initSwipe(card, id => {
     const removed = deleteItem(id);
     if (removed) showUndo('Deleted', removed);
@@ -758,22 +668,69 @@ function renderReview() {
   }));
 }
 
-function autosize(el) {
-  el.style.height = 'auto';
-  el.style.height = el.scrollHeight + 'px';
+// Shared card action wiring for review + browse
+function wireCardActions(container, onUpdate) {
+  container.querySelectorAll('.action-btn.done-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const undoData = markDone(btn.dataset.id);
+      if (undoData) showUndoDone('Marked done ✓', undoData);
+      onUpdate();
+    });
+  });
+  container.querySelectorAll('.action-btn.delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const removed = deleteItem(btn.dataset.id);
+      if (removed) showUndo('Deleted', removed);
+      onUpdate();
+    });
+  });
+  container.querySelectorAll('.action-btn.move').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const panel = document.getElementById('reassign-' + btn.dataset.id);
+      if (panel) { panel.classList.toggle('open'); btn.classList.toggle('open'); }
+    });
+  });
+  container.querySelectorAll('.reassign-save').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sel = document.getElementById('reassign-sel-' + btn.dataset.id);
+      if (!sel) return;
+      updateItem(btn.dataset.id, { account: sel.value });
+      onUpdate(); toast('Moved to ' + sel.value);
+    });
+  });
+  container.querySelectorAll('textarea.card-text-edit').forEach(el => {
+    autosize(el);
+    el.addEventListener('input', () => autosize(el));
+    el.addEventListener('blur', () => {
+      const item = data.items.find(i => i.id === el.dataset.id);
+      if (item && item.text !== el.value.trim()) { updateItem(el.dataset.id, { text: el.value.trim() }); toast('Updated'); }
+    });
+  });
+  // TCT toggle
+  container.querySelectorAll('.action-btn.tct-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ok = toggleTCT(btn.dataset.id);
+      if (!ok) { toast('Max 3 TCT — remove one first'); return; }
+      const item = data.items.find(i => i.id === btn.dataset.id);
+      toast(item?._tct ? 'Added to today\'s 3' : 'Removed from TCT');
+      onUpdate();
+    });
+  });
 }
 
-// ═══ BROWSE (formerly Retrieve) RENDERING ═══
+function autosize(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+
+// ═══ BROWSE RENDERING ═══
 function renderFilterBar() {
   const bar = document.getElementById('filter-bar');
-  bar.innerHTML = `<button class="filter-btn ${activeFilter === 'all' ? 'active' : ''}" data-cat="all">All</button>`
-    + data.categories.map(cat => {
-        const s = getCatStyle(cat);
-        const active = activeFilter === cat;
+  bar.innerHTML = `<button class="filter-btn ${activeFilter === 'all' ? 'active' : ''}" data-type="all">All</button>`
+    + TYPE_CONFIG.map(t => {
+        const s = getTypeStyle(t.key);
+        const active = activeFilter === t.key;
         const style = active ? `background:${s.bg};color:${s.color};border-color:transparent;` : '';
-        return `<button class="filter-btn ${active ? 'active' : ''}" style="${style}" data-cat="${cat}">${cat.charAt(0).toUpperCase() + cat.slice(1)}</button>`;
+        return `<button class="filter-btn ${active ? 'active' : ''}" style="${style}" data-type="${t.key}">${t.label}</button>`;
       }).join('')
-    + `<button class="filter-btn ${activeFilter === 'inbox' ? 'active' : ''}" data-cat="inbox">Inbox</button>`;
+    + `<button class="filter-btn ${activeFilter === 'inbox' ? 'active' : ''}" data-type="inbox">Inbox</button>`;
 }
 
 function renderBrowse() {
@@ -791,163 +748,52 @@ function renderBrowse() {
   const list    = document.getElementById('browse-list');
 
   if (!results.length) {
-    list.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">🔍</div>
-        <div class="empty-title">No results</div>
-        <p>Try a different search or filter</p>
-      </div>`;
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results</div><p>Try a different search or filter</p></div>`;
     return;
   }
 
+  // Separate TCT items
+  const tctItems = results.filter(i => i._tct);
+  const otherItems = results.filter(i => !i._tct);
+
+  let html = '';
+
+  // TCT section
+  if (tctItems.length) {
+    html += `<div class="tct-section">
+      <div class="tct-section-header">
+        <span class="tct-star">★</span> Today's Focus
+        <span class="tct-count">${tctItems.length}/3</span>
+      </div>
+      ${tctItems.map(item => renderBrowseCard(item)).join('')}
+    </div>`;
+  }
+
+  // Remaining items
   if (allAccounts) {
     const groups = new Map();
-    results.forEach(item => {
+    otherItems.forEach(item => {
       if (!groups.has(item.account)) groups.set(item.account, []);
       groups.get(item.account).push(item);
     });
-    let html = '';
     for (const [accName, items] of groups) {
       const acc = data.accounts.find(a => a.name === accName);
       const colour = acc ? acc.color : '#888';
       html += `<div class="account-group-header" style="color:${colour}">
         <span class="account-group-dot"></span>
         <span class="account-group-name">${escHtml(accName)}</span>
-        <span class="account-group-count">${items.length} item${items.length !== 1 ? 's' : ''}</span>
+        <span class="account-group-count">${items.length}</span>
       </div>`;
       html += items.map(item => renderBrowseCard(item)).join('');
     }
-    list.innerHTML = html;
   } else {
-    const urgent = results.filter(i => i._urgent);
-    const normal = results.filter(i => !i._urgent);
-    let html = '';
-    if (urgent.length) {
-      html += `<div class="urgent-section-label">Urgent · ${urgent.length} item${urgent.length !== 1 ? 's' : ''}</div>`;
-      html += urgent.map(item => renderBrowseCard(item)).join('');
-    }
-    const groups = groupByDate(normal);
-    for (const [label, items] of groups) {
-      html += `<div class="date-label">${escHtml(label)}</div>`;
-      html += items.map(item => renderBrowseCard(item)).join('');
-    }
-    list.innerHTML = html;
+    html += otherItems.map(item => renderBrowseCard(item)).join('');
   }
 
-  list.querySelectorAll('.action-btn.done-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const undoData = markDone(btn.dataset.id);
-      if (undoData) showUndoDone('Marked done ✓', undoData);
-      renderBrowse(); updateBadge(); updateStats();
-    });
-  });
+  list.innerHTML = html;
 
-  list.querySelectorAll('.action-btn.urgent-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const item = data.items.find(i => i.id === btn.dataset.id);
-      if (!item) return;
-      updateItem(btn.dataset.id, { _urgent: !item._urgent });
-      renderBrowse();
-      toast(item._urgent ? 'Urgent removed' : 'Marked urgent');
-    });
-  });
+  wireCardActions(list, () => { renderBrowse(); updateBadge(); updateStats(); });
 
-  list.querySelectorAll('.action-btn.delete').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const removed = deleteItem(btn.dataset.id);
-      if (removed) showUndo('Deleted', removed);
-      renderBrowse(); updateStats();
-    });
-  });
-
-  list.querySelectorAll('.action-btn.move').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const panel = document.getElementById('reassign-' + btn.dataset.id);
-      if (panel) { panel.classList.toggle('open'); btn.classList.toggle('open'); }
-    });
-  });
-
-  list.querySelectorAll('.reassign-save').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const sel = document.getElementById('reassign-sel-' + btn.dataset.id);
-      if (!sel) return;
-      updateItem(btn.dataset.id, { account: sel.value });
-      renderBrowse();
-      toast('Moved to ' + sel.value);
-    });
-  });
-
-  // Text editing in browse cards
-  list.querySelectorAll('textarea.card-text-edit').forEach(el => {
-    autosize(el);
-    el.addEventListener('input', () => autosize(el));
-    el.addEventListener('blur', () => {
-      const item = data.items.find(i => i.id === el.dataset.id);
-      if (item && item.text !== el.value.trim()) {
-        updateItem(el.dataset.id, { text: el.value.trim() });
-        toast('Updated');
-      }
-    });
-  });
-
-  // Due date change — inline update (no full re-render)
-  list.querySelectorAll('.review-due-input').forEach(el => {
-    el.addEventListener('change', () => {
-      updateItem(el.dataset.id, { dueDate: el.value || null });
-      const row = el.closest('.review-due-row');
-      if (row) {
-        row.querySelectorAll('.due-tag, .review-due-none, .review-due-clear').forEach(e => e.remove());
-        if (el.value) {
-          const clearBtn = document.createElement('button');
-          clearBtn.className = 'review-due-clear';
-          clearBtn.dataset.id = el.dataset.id;
-          clearBtn.title = 'Clear due date';
-          clearBtn.textContent = '×';
-          clearBtn.addEventListener('click', () => {
-            updateItem(el.dataset.id, { dueDate: null });
-            el.value = '';
-            clearBtn.remove();
-            row.querySelectorAll('.due-tag').forEach(e => e.remove());
-            const none = document.createElement('span');
-            none.className = 'review-due-none';
-            none.textContent = 'No date set';
-            row.appendChild(none);
-            toast('Due date cleared');
-          });
-          row.appendChild(clearBtn);
-          const tagSpan = document.createElement('span');
-          tagSpan.innerHTML = formatDueDate(el.value);
-          row.appendChild(tagSpan.firstChild);
-        } else {
-          const none = document.createElement('span');
-          none.className = 'review-due-none';
-          none.textContent = 'No date set';
-          row.appendChild(none);
-        }
-      }
-      toast(el.value ? 'Due date set' : 'Due date cleared');
-    });
-  });
-
-  // Due date clear button
-  list.querySelectorAll('.review-due-clear').forEach(btn => {
-    btn.addEventListener('click', () => {
-      updateItem(btn.dataset.id, { dueDate: null });
-      const row = btn.closest('.review-due-row');
-      if (row) {
-        const input = row.querySelector('.review-due-input');
-        if (input) input.value = '';
-        row.querySelectorAll('.due-tag, .review-due-clear').forEach(e => e.remove());
-        const none = document.createElement('span');
-        none.className = 'review-due-none';
-        none.textContent = 'No date set';
-        row.appendChild(none);
-      }
-      toast('Due date cleared');
-    });
-  });
-
-  // Swipe to delete on browse cards
   list.querySelectorAll('.card').forEach(card => initSwipe(card, id => {
     const removed = deleteItem(id);
     if (removed) showUndo('Deleted', removed);
@@ -955,65 +801,43 @@ function renderBrowse() {
   }));
 }
 
-function doneSVG() {
-  return `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`;
-}
-
-function formatDueDate(dateStr) {
-  if (!dateStr) return '';
-  const due = new Date(dateStr + 'T00:00:00');
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-  const diff = Math.floor((due - today) / 86400000);
-  if (diff < 0) return `<span class="due-tag overdue">Overdue ${Math.abs(diff)}d</span>`;
-  if (diff === 0) return `<span class="due-tag due-today">Due today</span>`;
-  if (diff === 1) return `<span class="due-tag due-soon">Tomorrow</span>`;
-  if (diff <= 7) return `<span class="due-tag due-soon">${diff}d</span>`;
-  return `<span class="due-tag">${due.toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</span>`;
-}
-
 function renderBrowseCard(item) {
-  const catStyle = getCatStyle(item.category);
-  const catLabel = item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : 'Inbox';
-  const badgeStyle = `background:${catStyle.bg};color:${catStyle.color};`;
+  const typeStyle = getTypeStyle(item.type);
+  const ageDays = getAgeDays(item.createdAt);
+  const ageClass = getAgeClass(item);
   const accOptions = data.accounts.map(a =>
     `<option value="${esc(a.name)}" ${a.name === item.account ? 'selected' : ''}>${escHtml(a.name)}</option>`
   ).join('');
-  const dueBadge = formatDueDate(item.dueDate);
+
+  let ageBadge = '';
+  if (item.dueDate) {
+    ageBadge = formatDueDate(item.dueDate);
+  } else {
+    const ageLabel = getAgeLabel(ageDays);
+    const cls = ageClass === 'stale-red' ? 'age-badge stale-red' : ageClass === 'stale-amber' ? 'age-badge stale-amber' : 'age-badge';
+    ageBadge = `<span class="${cls}">${ageLabel}</span>`;
+  }
+
+  const tctActive = item._tct;
+  const canTCT = item.type !== 'note' && item.type !== 'someday';
 
   return `
-    <div class="card ${item._urgent ? 'urgent' : ''}" data-id="${esc(item.id)}">
+    <div class="card ${tctActive ? 'tct' : ''} ${ageClass}" data-id="${esc(item.id)}">
       <div class="card-swipe-delete">${trashSVG()}<span>Delete</span></div>
       <div class="card-inner">
         <div class="card-text-header">
-          <span class="cat-badge" style="${badgeStyle}">${catLabel}</span>
+          <span class="type-badge" style="background:${typeStyle.bg};color:${typeStyle.color};">${typeStyle.label}</span>
+          ${ageBadge}
+          ${tctActive ? '<span class="tct-badge">★ TCT</span>' : ''}
         </div>
         <textarea class="card-text-edit" data-id="${esc(item.id)}">${escTextarea(item.text)}</textarea>
-        <div class="review-due-row">
-          <label class="review-due-label">
-            <svg viewBox="0 0 24 24" width="13" height="13"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" fill="currentColor"/></svg>
-            Due
-          </label>
-          <input type="date" class="review-due-input" data-id="${esc(item.id)}" value="${item.dueDate || ''}">
-          ${item.dueDate ? `<button class="review-due-clear" data-id="${esc(item.id)}" title="Clear due date">×</button>` : ''}
-          ${item.dueDate ? formatDueDate(item.dueDate) : '<span class="review-due-none">No date set</span>'}
-        </div>
         <div class="card-footer">
           <span class="card-meta">${formatTime(item.createdAt)}</span>
           <div class="card-actions">
-            <button class="action-btn done-btn" data-id="${esc(item.id)}" title="Mark done">
-              ${doneSVG()}
-            </button>
-            <button class="action-btn urgent-btn ${item._urgent ? 'active' : ''}" data-id="${esc(item.id)}" title="${item._urgent ? 'Remove urgent' : 'Mark urgent'}">
-              <span style="font-size:15px;font-weight:800;line-height:1;">!</span>
-            </button>
-            <button class="action-btn move" data-id="${esc(item.id)}" title="Move to account">
-              ${moveSVG()}
-            </button>
-            <button class="action-btn delete" data-id="${esc(item.id)}" title="Delete">
-              ${trashSVG()}
-            </button>
+            <button class="action-btn done-btn" data-id="${esc(item.id)}" title="Mark done">${doneSVG()}</button>
+            ${canTCT ? `<button class="action-btn tct-btn ${tctActive ? 'active' : ''}" data-id="${esc(item.id)}" title="${tctActive ? 'Remove TCT' : 'Add to today\'s 3'}">★</button>` : ''}
+            <button class="action-btn move" data-id="${esc(item.id)}" title="Move to account">${moveSVG()}</button>
+            <button class="action-btn delete" data-id="${esc(item.id)}" title="Delete">${trashSVG()}</button>
           </div>
         </div>
         <div class="reassign-panel" id="reassign-${esc(item.id)}">
@@ -1025,94 +849,316 @@ function renderBrowseCard(item) {
     </div>`;
 }
 
-function groupByDate(items) {
-  const groups = new Map();
-  const now       = new Date();
-  const today     = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-  const weekAgo   = new Date(today); weekAgo.setDate(today.getDate() - 7);
-
-  items.forEach(item => {
-    const d = new Date(item.createdAt);
-    let label;
-    if (d >= today)     label = 'Today';
-    else if (d >= yesterday) label = 'Yesterday';
-    else if (d >= weekAgo)   label = 'This Week';
-    else label = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-    if (!groups.has(label)) groups.set(label, []);
-    groups.get(label).push(item);
-  });
-  return groups;
+function formatDueDate(dateStr) {
+  if (!dateStr) return '';
+  const due = new Date(dateStr + 'T00:00:00');
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.floor((due - today) / 86400000);
+  if (diff < 0) return `<span class="due-tag overdue">Overdue ${Math.abs(diff)}d</span>`;
+  if (diff === 0) return `<span class="due-tag due-today">Due today</span>`;
+  if (diff === 1) return `<span class="due-tag due-soon">Tomorrow</span>`;
+  if (diff <= 7) return `<span class="due-tag due-soon">${diff}d</span>`;
+  return `<span class="due-tag">${due.toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</span>`;
 }
 
 document.getElementById('filter-bar').addEventListener('click', e => {
   const btn = e.target.closest('.filter-btn');
   if (!btn) return;
-  activeFilter = btn.dataset.cat;
+  activeFilter = btn.dataset.type;
   renderBrowse();
 });
 
-document.getElementById('all-accounts-toggle').addEventListener('click', () => {
-  allAccounts = !allAccounts; renderBrowse();
-});
-
+document.getElementById('all-accounts-toggle').addEventListener('click', () => { allAccounts = !allAccounts; renderBrowse(); });
 document.getElementById('search-input').addEventListener('input', function() {
   document.getElementById('search-wrap').classList.toggle('has-value', !!this.value);
   renderBrowse();
 });
-
 document.getElementById('search-clear').addEventListener('click', () => {
   document.getElementById('search-input').value = '';
   document.getElementById('search-wrap').classList.remove('has-value');
   renderBrowse();
 });
-
 document.getElementById('sort-select').addEventListener('change', renderBrowse);
-
-// Cross-account notice: click to cycle to account with most inbox items
 document.getElementById('cross-account-notice')?.addEventListener('click', () => {
   const otherAccounts = data.accounts.filter(a => a.name !== activeAccount);
   let best = null, bestCount = 0;
-  otherAccounts.forEach(a => {
-    const c = getInboxItems(a.name).length;
-    if (c > bestCount) { best = a.name; bestCount = c; }
-  });
+  otherAccounts.forEach(a => { const c = getInboxItems(a.name).length; if (c > bestCount) { best = a.name; bestCount = c; } });
   if (best) { setActiveAccount(best); switchView('review'); }
 });
+
+// ═══ WEEKLY REVIEW ═══
+let wrItems = [];
+let wrIndex = 0;
+let wrStats = { kept: 0, done: 0, killed: 0, edited: 0, tct: 0 };
+
+function startWeeklyReview() {
+  // Close settings panel if open
+  document.getElementById('settings-panel-overlay').classList.remove('open');
+  document.getElementById('review-banner').classList.add('hidden');
+
+  const active = getActiveItems();
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // Sort: overdue first, then stale, then healthy, then note/someday last
+  const overdue = active.filter(i => i.dueDate && new Date(i.dueDate + 'T23:59:59') < today && i.type !== 'note' && i.type !== 'someday');
+  const stale = active.filter(i => !i.dueDate && getAgeDays(i.createdAt) >= 14 && i.type !== 'note' && i.type !== 'someday' && !overdue.includes(i));
+  const healthy = active.filter(i => i.type !== 'note' && i.type !== 'someday' && !overdue.includes(i) && !stale.includes(i));
+  const notesSomeday = active.filter(i => i.type === 'note' || i.type === 'someday');
+
+  overdue.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  stale.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  healthy.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+  wrItems = [...overdue, ...stale, ...healthy, ...notesSomeday];
+  wrIndex = 0;
+  wrStats = { kept: 0, done: 0, killed: 0, edited: 0, tct: 0, startCount: active.length };
+
+  switchView('weekly-review');
+
+  if (wrItems.length === 0) {
+    renderWRSummary();
+  } else {
+    renderWROverview(active, overdue, stale);
+  }
+}
+
+function renderWROverview(active, overdue, stale) {
+  const container = document.getElementById('wr-content');
+  const lastReview = localStorage.getItem(LAST_REVIEW_KEY);
+  const daysSince = lastReview ? Math.floor((Date.now() - new Date(lastReview).getTime()) / 86400000) : null;
+
+  // Count by account
+  const byCounts = {};
+  active.forEach(i => { byCounts[i.account] = (byCounts[i.account] || 0) + 1; });
+
+  container.innerHTML = `
+    <div class="wr-overview">
+      <h2 class="wr-title">Weekly Review</h2>
+      <p class="wr-subtitle">${daysSince !== null ? `Last review: ${daysSince} day${daysSince !== 1 ? 's' : ''} ago` : 'First review'}</p>
+      <div class="wr-stats-row">
+        <div class="wr-stat"><span class="wr-stat-num wr-danger">${overdue.length}</span><span class="wr-stat-label">Overdue</span></div>
+        <div class="wr-stat"><span class="wr-stat-num wr-amber">${stale.length}</span><span class="wr-stat-label">Stale</span></div>
+        <div class="wr-stat"><span class="wr-stat-num">${active.length}</span><span class="wr-stat-label">Total</span></div>
+      </div>
+      <div class="wr-accounts">
+        ${Object.entries(byCounts).sort((a,b) => b[1] - a[1]).map(([acc, count]) => {
+          const accObj = data.accounts.find(a => a.name === acc);
+          const color = accObj ? accObj.color : '#888';
+          return `<div class="wr-acc-row"><span class="account-dot" style="background:${color}"></span><span>${escHtml(acc)}</span><span class="wr-acc-count">${count}</span></div>`;
+        }).join('')}
+      </div>
+      <button class="capture-btn" id="wr-start-btn" style="margin-top:20px;">Let's go — ${wrItems.length} items</button>
+      <button class="subtle-btn" id="wr-cancel-btn" style="margin-top:10px;width:100%;">Cancel</button>
+    </div>`;
+
+  document.getElementById('wr-start-btn').addEventListener('click', () => renderWRCard());
+  document.getElementById('wr-cancel-btn').addEventListener('click', () => switchView('capture'));
+}
+
+function renderWRCard() {
+  if (wrIndex >= wrItems.length) { renderWRSummary(); return; }
+
+  const container = document.getElementById('wr-content');
+  const item = wrItems[wrIndex];
+  const acc = data.accounts.find(a => a.name === item.account);
+  const accColor = acc ? acc.color : '#888';
+  const typeStyle = getTypeStyle(item.type);
+  const ageDays = getAgeDays(item.createdAt);
+  const ageClass = getAgeClass(item);
+  const canTCT = item.type !== 'note' && item.type !== 'someday' && getTCTCount() < 3 && !item._tct;
+
+  let statusLine = '';
+  if (item.dueDate) {
+    const due = new Date(item.dueDate + 'T23:59:59');
+    const today = new Date(); today.setHours(0,0,0,0);
+    if (due < today) statusLine = `<span class="wr-status overdue">Overdue by ${Math.abs(Math.floor((due - today) / 86400000))} days</span>`;
+    else statusLine = `<span class="wr-status">Due ${new Date(item.dueDate + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</span>`;
+  } else if (ageDays >= 14 && item.type !== 'note' && item.type !== 'someday') {
+    statusLine = `<span class="wr-status stale">Stale — ${ageDays} days old</span>`;
+  }
+
+  // Type-specific prompt
+  let prompt = '';
+  if (item.type === 'waiting') prompt = '<div class="wr-prompt">Still waiting? Chase or kill?</div>';
+  else if (item.type === 'project') prompt = '<div class="wr-prompt">What\'s the actual next action here?</div>';
+
+  container.innerHTML = `
+    <div class="wr-card-view">
+      <div class="wr-progress">
+        <div class="wr-progress-bar" style="width:${((wrIndex + 1) / wrItems.length * 100)}%"></div>
+      </div>
+      <div class="wr-progress-label">${wrIndex + 1} of ${wrItems.length}</div>
+
+      <div class="wr-card ${ageClass}">
+        <div class="wr-card-header">
+          <span class="account-dot" style="background:${accColor}"></span>
+          <span class="wr-card-account">${escHtml(item.account)}</span>
+          <span class="type-badge" style="background:${typeStyle.bg};color:${typeStyle.color};">${typeStyle.label}</span>
+          <span class="age-badge ${ageClass}">${getAgeLabel(ageDays)}</span>
+        </div>
+        ${statusLine}
+        ${prompt}
+        <textarea class="wr-card-text" id="wr-text">${escTextarea(item.text)}</textarea>
+        <div class="wr-type-row">
+          <span class="wr-type-label">Type:</span>
+          <select class="wr-type-select" id="wr-type-select">
+            ${TYPE_CONFIG.map(t => `<option value="${t.key}" ${item.type === t.key ? 'selected' : ''}>${t.label}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <div class="wr-actions">
+        <button class="wr-action-btn wr-keep" id="wr-keep">Keep</button>
+        <button class="wr-action-btn wr-done" id="wr-done">Done ✓</button>
+        <button class="wr-action-btn wr-kill" id="wr-kill">Kill</button>
+        ${canTCT ? '<button class="wr-action-btn wr-tct" id="wr-tct">★ TCT</button>' : ''}
+      </div>
+    </div>`;
+
+  document.getElementById('wr-keep').addEventListener('click', () => {
+    applyWREdits(item);
+    wrStats.kept++;
+    wrIndex++;
+    renderWRCard();
+  });
+
+  document.getElementById('wr-done').addEventListener('click', () => {
+    applyWREdits(item);
+    markDone(item.id);
+    wrStats.done++;
+    wrIndex++;
+    renderWRCard();
+  });
+
+  document.getElementById('wr-kill').addEventListener('click', () => {
+    deleteItem(item.id);
+    wrStats.killed++;
+    wrIndex++;
+    renderWRCard();
+  });
+
+  const tctBtn = document.getElementById('wr-tct');
+  if (tctBtn) {
+    tctBtn.addEventListener('click', () => {
+      applyWREdits(item);
+      toggleTCT(item.id);
+      wrStats.tct++;
+      wrStats.kept++;
+      wrIndex++;
+      renderWRCard();
+    });
+  }
+}
+
+function applyWREdits(item) {
+  const textEl = document.getElementById('wr-text');
+  const typeEl = document.getElementById('wr-type-select');
+  const updates = {};
+  if (textEl && textEl.value.trim() !== item.text) { updates.text = textEl.value.trim(); wrStats.edited++; }
+  if (typeEl && typeEl.value !== item.type) { updates.type = typeEl.value; wrStats.edited++; }
+  if (Object.keys(updates).length) updateItem(item.id, updates);
+}
+
+function renderWRSummary() {
+  const container = document.getElementById('wr-content');
+  const newActive = getActiveItems().length;
+
+  localStorage.setItem(LAST_REVIEW_KEY, new Date().toISOString());
+
+  container.innerHTML = `
+    <div class="wr-summary">
+      <div class="wr-summary-icon">✓</div>
+      <h2 class="wr-title">Review Complete</h2>
+      <div class="wr-stats-row">
+        <div class="wr-stat"><span class="wr-stat-num">${wrStats.kept}</span><span class="wr-stat-label">Kept</span></div>
+        <div class="wr-stat"><span class="wr-stat-num wr-success">${wrStats.done}</span><span class="wr-stat-label">Done</span></div>
+        <div class="wr-stat"><span class="wr-stat-num wr-danger">${wrStats.killed}</span><span class="wr-stat-label">Killed</span></div>
+        <div class="wr-stat"><span class="wr-stat-num">${wrStats.edited}</span><span class="wr-stat-label">Edited</span></div>
+        ${wrStats.tct ? `<div class="wr-stat"><span class="wr-stat-num wr-accent">★ ${wrStats.tct}</span><span class="wr-stat-label">TCT</span></div>` : ''}
+      </div>
+      <div class="wr-summary-total">
+        <span>Active items: <strong>${newActive}</strong></span>
+        <span class="wr-summary-change">${wrStats.startCount ? `(was ${wrStats.startCount})` : ''}</span>
+      </div>
+      <button class="capture-btn" id="wr-finish-btn" style="margin-top:24px;">Done</button>
+    </div>`;
+
+  document.getElementById('wr-finish-btn').addEventListener('click', () => {
+    renderAll();
+    switchView('browse');
+  });
+}
+
+// Review banner
+function checkReviewBanner() {
+  const banner = document.getElementById('review-banner');
+  if (!banner) return;
+
+  const lastReview = localStorage.getItem(LAST_REVIEW_KEY);
+  const snoozedUntil = localStorage.getItem(REVIEW_SNOOZE_KEY);
+
+  if (snoozedUntil && Date.now() < parseInt(snoozedUntil)) { banner.classList.add('hidden'); return; }
+
+  if (!lastReview) {
+    banner.classList.remove('hidden');
+    document.getElementById('review-banner-text').textContent = 'You haven\'t done a weekly review yet';
+    return;
+  }
+
+  const daysSince = Math.floor((Date.now() - new Date(lastReview).getTime()) / 86400000);
+  if (daysSince >= 7) {
+    banner.classList.remove('hidden');
+    document.getElementById('review-banner-text').textContent = `${daysSince} days since your last review`;
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+document.getElementById('review-banner-start')?.addEventListener('click', startWeeklyReview);
+document.getElementById('review-banner-snooze')?.addEventListener('click', () => {
+  localStorage.setItem(REVIEW_SNOOZE_KEY, (Date.now() + 86400000).toString());
+  document.getElementById('review-banner').classList.add('hidden');
+});
+
+document.getElementById('start-weekly-review-btn')?.addEventListener('click', startWeeklyReview);
+
+// Update settings review meta
+function updateReviewMeta() {
+  const el = document.getElementById('settings-review-meta');
+  if (!el) return;
+  const lastReview = localStorage.getItem(LAST_REVIEW_KEY);
+  if (!lastReview) { el.textContent = 'Never reviewed'; return; }
+  const daysSince = Math.floor((Date.now() - new Date(lastReview).getTime()) / 86400000);
+  el.textContent = daysSince === 0 ? 'Reviewed today' : `${daysSince}d ago`;
+}
 
 // ═══ SWIPE TO DELETE ═══
 function initSwipe(card, onDelete) {
   const inner = card.querySelector('.card-inner');
   if (!inner) return;
-
   let startX = 0, currentX = 0, isDragging = false;
   const THRESHOLD = 80;
-
   card.addEventListener('touchstart', e => {
-    startX = e.touches[0].clientX;
-    isDragging = true;
+    if (e.target.closest('textarea, select, button, input')) return;
+    startX = e.touches[0].clientX; isDragging = true;
     inner.style.transition = 'none';
   }, { passive: true });
-
   card.addEventListener('touchmove', e => {
     if (!isDragging) return;
     currentX = e.touches[0].clientX - startX;
-    if (currentX < 0) {
-      const offset = Math.max(currentX, -THRESHOLD - 20);
-      inner.style.transform = `translateX(${offset}px)`;
-      card.classList.add('swiping');
-    }
+    if (currentX > 0) currentX = 0;
+    inner.style.transform = `translateX(${currentX}px)`;
+    if (currentX < -10) card.classList.add('swiping');
   }, { passive: true });
-
   card.addEventListener('touchend', () => {
     if (!isDragging) return;
     isDragging = false;
     inner.style.transition = 'transform 0.2s ease';
-
     if (currentX < -THRESHOLD) {
       inner.style.transform = `translateX(-100%)`;
-      card.style.opacity = '0';
-      card.style.transition = 'opacity 0.2s ease';
+      card.style.opacity = '0'; card.style.transition = 'opacity 0.2s ease';
       const id = card.dataset.id;
       setTimeout(() => onDelete(id), 200);
     } else {
@@ -1151,17 +1197,8 @@ function showUndoDone(msg, item) {
 }
 
 undoBtn.addEventListener('click', () => {
-  if (undoDoneItem) {
-    undoDone(undoDoneItem); undoDoneItem = null;
-    toastEl.classList.remove('show');
-    renderAll(); toast('Restored');
-    return;
-  }
-  if (undoItem) {
-    restoreItem(undoItem); undoItem = null;
-    toastEl.classList.remove('show');
-    renderAll(); toast('Restored');
-  }
+  if (undoDoneItem) { undoDone(undoDoneItem); undoDoneItem = null; toastEl.classList.remove('show'); renderAll(); toast('Restored'); return; }
+  if (undoItem) { restoreItem(undoItem); undoItem = null; toastEl.classList.remove('show'); renderAll(); toast('Restored'); }
 });
 
 // ═══ MODAL ═══
@@ -1180,7 +1217,6 @@ function openModal(title, body, contentFn, onConfirm, confirmText, danger) {
 }
 
 function closeModal() { modalOverlay.classList.remove('open'); modalCallback = null; }
-
 document.getElementById('modal-cancel').addEventListener('click', closeModal);
 document.getElementById('modal-confirm').addEventListener('click', () => { if (modalCallback) modalCallback(); closeModal(); });
 modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeModal(); });
@@ -1189,17 +1225,11 @@ modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) clo
 const settingsPanelOverlay = document.getElementById('settings-panel-overlay');
 
 document.getElementById('settings-btn').addEventListener('click', () => {
-  updateStatsLabel();
+  updateStatsLabel(); updateReviewMeta();
   settingsPanelOverlay.classList.add('open');
 });
-
-document.getElementById('settings-panel-close').addEventListener('click', () => {
-  settingsPanelOverlay.classList.remove('open');
-});
-
-settingsPanelOverlay.addEventListener('click', e => {
-  if (e.target === settingsPanelOverlay) settingsPanelOverlay.classList.remove('open');
-});
+document.getElementById('settings-panel-close').addEventListener('click', () => settingsPanelOverlay.classList.remove('open'));
+settingsPanelOverlay.addEventListener('click', e => { if (e.target === settingsPanelOverlay) settingsPanelOverlay.classList.remove('open'); });
 
 function updateStatsLabel() {
   const active  = data.items.filter(i => !i._deleted && !i._done).length;
@@ -1231,8 +1261,7 @@ document.getElementById('cloud-btn').addEventListener('click', () => {
     const url = document.getElementById('cloud-url-input').value.trim();
     const key = document.getElementById('cloud-key-input').value.trim();
     if (url) {
-      localStorage.setItem(CLOUD_URL_KEY, url);
-      localStorage.setItem(CLOUD_KEY_KEY, key);
+      localStorage.setItem(CLOUD_URL_KEY, url); localStorage.setItem(CLOUD_KEY_KEY, key);
       cloudUrl = url; cloudKey = key;
       setTimeout(() => pullFromCloud(), 500);
     } else {
@@ -1252,7 +1281,6 @@ document.getElementById('export-btn').addEventListener('click', () => {
 });
 
 document.getElementById('import-btn').addEventListener('click', () => document.getElementById('import-file').click());
-
 document.getElementById('import-file').addEventListener('change', e => {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
@@ -1271,6 +1299,9 @@ document.getElementById('import-file').addEventListener('change', e => {
         });
       }
       data.items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      // Re-run migration on imported data
+      localStorage.removeItem(MIGRATED_KEY);
+      data = migrateV2toV3(data);
       saveData(); renderAll();
       toast('Imported ' + count + ' items');
     } catch (err) { console.error(err); toast('Invalid backup file'); }
@@ -1278,15 +1309,8 @@ document.getElementById('import-file').addEventListener('change', e => {
   reader.readAsText(file); e.target.value = '';
 });
 
-document.getElementById('trash-btn').addEventListener('click', () => {
-  settingsPanelOverlay.classList.remove('open');
-  openTrashView();
-});
-
-document.getElementById('purge-btn').addEventListener('click', () => {
-  settingsPanelOverlay.classList.remove('open');
-  openTrashView();
-});
+document.getElementById('trash-btn').addEventListener('click', () => { settingsPanelOverlay.classList.remove('open'); openTrashView(); });
+document.getElementById('purge-btn').addEventListener('click', () => { settingsPanelOverlay.classList.remove('open'); openTrashView(); });
 
 document.getElementById('reset-btn').addEventListener('click', () => {
   openModal('Reset App?', 'This deletes ALL local data. Cloud data is kept.', ct => {
@@ -1299,87 +1323,35 @@ document.getElementById('reset-btn').addEventListener('click', () => {
       });
     }, 50);
   }, () => {
-    data = { items: [], accounts: DEFAULT_ACCOUNTS, categories: DEFAULT_CATEGORIES };
+    data = { items: [], accounts: DEFAULT_ACCOUNTS, types: DEFAULT_TYPES };
+    localStorage.removeItem(MIGRATED_KEY);
     saveData(); setActiveAccount('Personal'); toast('App reset');
   }, 'Reset', true);
-  setTimeout(() => {
-    document.getElementById('modal-confirm').disabled = true;
-    document.getElementById('modal-confirm').style.opacity = '0.4';
-  }, 50);
+  setTimeout(() => { document.getElementById('modal-confirm').disabled = true; document.getElementById('modal-confirm').style.opacity = '0.4'; }, 50);
 });
 
-document.getElementById('categories-btn').addEventListener('click', openCategorySettings);
-document.getElementById('colours-btn').addEventListener('click', openAccountColourSettings);
-
-// ═══ CATEGORY MANAGEMENT ═══
-function openCategorySettings() {
-  settingsPanelOverlay.classList.remove('open');
-  openModal('Manage Categories', 'Add or remove global categories used for filing items.', ct => {
-    function renderCatList() {
-      ct.innerHTML = `
-        <div id="cat-list-inner">
-          ${data.categories.map((cat, idx) => {
-            const s = getCatStyle(cat);
-            return `<div class="settings-list-item">
-              <div class="settings-list-left">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};"></span>
-                <span style="font-weight:600;">${escHtml(cat.charAt(0).toUpperCase() + cat.slice(1))}</span>
-              </div>
-              <span class="settings-rm" data-idx="${idx}">×</span>
-            </div>`;
-          }).join('')}
-        </div>
-        <div class="settings-add-row">
-          <input class="settings-add-input" id="new-cat-input" placeholder="New category name" maxlength="30">
-          <button class="settings-add-btn" id="add-cat-btn">+ Add</button>
-        </div>`;
-      ct.querySelectorAll('.settings-rm').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const idx = parseInt(btn.dataset.idx);
-          if (data.categories.length <= 1) { toast('Keep at least one category'); return; }
-          data.categories.splice(idx, 1); saveData(); renderCatList();
-        });
-      });
-      ct.querySelector('#add-cat-btn').addEventListener('click', () => {
-        const val = ct.querySelector('#new-cat-input').value.trim().toLowerCase();
-        if (!val) return;
-        if (data.categories.includes(val)) { toast('Category already exists'); return; }
-        data.categories.push(val); saveData(); renderCatList(); toast('Category added');
-      });
-      ct.querySelector('#new-cat-input').addEventListener('keydown', e => {
-        if (e.key === 'Enter') ct.querySelector('#add-cat-btn').click();
-      });
-    }
-    renderCatList();
-  }, () => renderAll(), 'Done');
-}
-
-// ═══ ACCOUNT COLOUR MANAGEMENT ═══
-function openAccountColourSettings() {
+document.getElementById('colours-btn').addEventListener('click', () => {
   settingsPanelOverlay.classList.remove('open');
   openModal('Account Colours', 'Tap the colour swatch to change any account colour.', ct => {
-    function renderAccColours() {
-      ct.innerHTML = data.accounts.map((acc, idx) => `
-        <div class="settings-list-item">
-          <div class="settings-list-left">
-            <div class="settings-color-swatch" style="background:${acc.color}">
-              <input type="color" value="${acc.color}" data-idx="${idx}" title="Change colour">
-            </div>
-            <span style="font-weight:600;">${escHtml(acc.name)}</span>
+    ct.innerHTML = data.accounts.map((acc, idx) => `
+      <div class="settings-list-item">
+        <div class="settings-list-left">
+          <div class="settings-color-swatch" style="background:${acc.color}">
+            <input type="color" value="${acc.color}" data-idx="${idx}" title="Change colour">
           </div>
-        </div>`).join('');
-      ct.querySelectorAll('input[type="color"]').forEach(inp => {
-        inp.addEventListener('change', () => {
-          const idx = parseInt(inp.dataset.idx);
-          data.accounts[idx].color = inp.value;
-          inp.closest('.settings-color-swatch').style.background = inp.value;
-          saveData(); renderAccountDropdown(); updateCaptureIndicator();
-        });
+          <span style="font-weight:600;">${escHtml(acc.name)}</span>
+        </div>
+      </div>`).join('');
+    ct.querySelectorAll('input[type="color"]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const idx = parseInt(inp.dataset.idx);
+        data.accounts[idx].color = inp.value;
+        inp.closest('.settings-color-swatch').style.background = inp.value;
+        saveData(); renderAccountDropdown(); updateCaptureIndicator();
       });
-    }
-    renderAccColours();
+    });
   }, () => renderAll(), 'Done');
-}
+});
 
 // ═══ COLOUR PROMPT ═══
 function checkColourPrompt() {
@@ -1396,9 +1368,7 @@ function checkColourPrompt() {
       </div>
     </div>`).join('');
   list.querySelectorAll('input[type="color"]').forEach(inp => {
-    inp.addEventListener('input', () => {
-      document.getElementById('swatch-' + inp.dataset.acc).style.background = inp.value;
-    });
+    inp.addEventListener('input', () => { document.getElementById('swatch-' + inp.dataset.acc).style.background = inp.value; });
   });
   document.getElementById('colour-prompt-overlay').classList.add('open');
 }
@@ -1412,6 +1382,38 @@ document.getElementById('colour-prompt-save').addEventListener('click', () => {
   document.getElementById('colour-prompt-overlay').classList.remove('open');
   toast('Account colours saved');
 });
+
+// ═══ DIGEST ═══
+document.getElementById('digest-btn').addEventListener('click', () => {
+  const active = getActiveItems();
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const overdueCount = active.filter(i => i.dueDate && new Date(i.dueDate + 'T23:59:59') < today).length;
+  const staleCount = active.filter(i => !i.dueDate && getAgeDays(i.createdAt) >= 14 && i.type !== 'note' && i.type !== 'someday').length;
+  openModal(
+    'Send Digest',
+    `${active.length} active items${overdueCount ? ` · ${overdueCount} overdue` : ''}${staleCount ? ` · ${staleCount} stale` : ''}`,
+    null, sendDigest, 'Send'
+  );
+});
+
+async function sendDigest() {
+  if (!cloudUrl) { toast('No cloud URL configured'); return; }
+  toast('Sending digest…');
+  try {
+    const active = getActiveItems();
+    const res = await fetch(cloudUrl, {
+      method: 'POST', redirect: 'follow',
+      body: JSON.stringify({
+        key: cloudKey, action: 'digest', digestHtml: '<p>Digest v3 — use app for full review</p>',
+        itemCount: active.length, overdueCount: 0,
+        generatedAt: new Date().toISOString()
+      })
+    });
+    const result = JSON.parse(await res.text());
+    toast(result.success ? 'Digest sent ✓' : 'Digest failed');
+  } catch (e) { console.error(e); toast('Digest send failed'); }
+}
 
 // ═══ BADGE / STATS ═══
 function updateBadge() {
@@ -1433,252 +1435,39 @@ function updateStats() {
   if (deleted > 0) text += ' · ' + deleted + ' in trash';
   const el = document.getElementById('stats-text');
   if (el) el.textContent = text;
-
-  // Trash count badge on View Trash button
   const trashCount = document.getElementById('trash-count');
   if (trashCount) {
     if (deleted > 0) { trashCount.textContent = deleted; trashCount.classList.remove('hidden'); }
     else { trashCount.classList.add('hidden'); }
   }
-
   const purgeBtn = document.getElementById('purge-btn');
   if (purgeBtn) purgeBtn.classList.toggle('hidden', deleted === 0);
 }
 
 function formatTime(iso) {
-  const d    = new Date(iso);
-  const now  = new Date();
-  const diff = now - d;
-  if (diff < 60000)    return 'just now';
-  if (diff < 3600000)  return Math.floor(diff / 60000) + 'm ago';
+  const d = new Date(iso); const now = new Date(); const diff = now - d;
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
   if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
   if (diff < 172800000) return 'yesterday';
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-function escHtml(s) {
-  if (typeof s !== 'string') return '';
-  const div = document.createElement('div'); div.textContent = s; return div.innerHTML;
-}
-function esc(s) {
-  if (typeof s !== 'string') return '';
-  return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-function escTextarea(s) {
-  if (typeof s !== 'string') return '';
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+function escHtml(s) { if (typeof s !== 'string') return ''; const div = document.createElement('div'); div.textContent = s; return div.innerHTML; }
+function esc(s) { if (typeof s !== 'string') return ''; return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escTextarea(s) { if (typeof s !== 'string') return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ═══ SVG ICONS ═══
-function trashSVG() {
-  return `<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
-}
-function moveSVG() {
-  // Folder with arrow — clearly indicates "move to account"
-  return `<svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10l-4-4 4-4v3h4v2h-4v3z"/></svg>`;
-}
+function trashSVG() { return `<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`; }
+function moveSVG() { return `<svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10l-4-4 4-4v3h4v2h-4v3z"/></svg>`; }
+function doneSVG() { return `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`; }
 
 function renderAll() {
   if (currentView === 'review')  renderReview();
   if (currentView === 'browse')  renderBrowse();
   updateBadge(); updateStats();
+  checkReviewBanner();
 }
-
-// ═══ EMAIL DIGEST ═══
-function buildDigestHtml() {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const weekFromNow = new Date(today); weekFromNow.setDate(today.getDate() + 7);
-  const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
-
-  const active = data.items.filter(i => !i._deleted && !i._done);
-  const completedRecently = data.items.filter(i => !i._deleted && i._done && i.completedAt && new Date(i.completedAt) >= weekAgo);
-
-  // Categorise active items by time
-  const overdue = active.filter(i => i.dueDate && new Date(i.dueDate + 'T23:59:59') < today);
-  const dueThisWeek = active.filter(i => i.dueDate && new Date(i.dueDate + 'T00:00:00') >= today && new Date(i.dueDate + 'T00:00:00') < weekFromNow);
-  const noDueDate = active.filter(i => !i.dueDate);
-  const dueLater = active.filter(i => i.dueDate && new Date(i.dueDate + 'T00:00:00') >= weekFromNow);
-
-  // Work type display config — order defines digest grouping priority
-  const WORK_TYPES = [
-    { key: 'twain',       label: 'Eat the Frog',  color: '#DE350B', bg: '#fde8e4' },
-    { key: 'strategic',   label: 'Strategic',      color: '#0033CC', bg: '#e6edff' },
-    { key: 'operational', label: 'Operational',    color: '#00875A', bg: '#e3fcef' },
-    { key: 'reactive',    label: 'Reactive',       color: '#FF8B00', bg: '#fff4e5' },
-    { key: 'waiting',     label: 'Waiting On',     color: '#6554C0', bg: '#eae6ff' },
-    { key: 'personal',    label: 'Personal',       color: '#00A3BF', bg: '#e6fcff' },
-  ];
-  const wtMap = new Map(WORK_TYPES.map(w => [w.key, w]));
-  function getWt(cat) { return wtMap.get(cat) || { key: cat || 'unfiled', label: cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : 'Unfiled', color: '#888', bg: '#f0f0f0' }; }
-
-  const styles = `body{font-family:Arial,sans-serif;font-size:14px;color:#111;background:#f5f5f5;padding:20px;max-width:640px;margin:0 auto;}
-h1{font-size:20px;font-weight:700;margin-bottom:4px;color:#0033CC;}
-.meta{font-size:12px;color:#888;margin-bottom:24px;}
-.section{margin-bottom:28px;padding:16px;background:#fff;border-radius:8px;border:1px solid #e0e0e0;}
-.section-title{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid currentColor;}
-.section-title.overdue{color:#CC2200;}
-.section-title.this-week{color:#0033CC;}
-.section-title.completed{color:#00875A;}
-.section-title.upcoming{color:#888;}
-.section-title.no-date{color:#888;}
-.wt-group{margin-bottom:16px;}
-.wt-group:last-child{margin-bottom:0;}
-.wt-header{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:6px 10px;border-radius:4px;margin-bottom:6px;}
-table{width:100%;border-collapse:collapse;}
-th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:#888;padding:6px 8px;border-bottom:1px solid #ddd;}
-td{padding:8px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top;}
-tr:last-child td{border-bottom:none;}
-.badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;text-transform:uppercase;margin-right:4px;}
-.acc-badge{background:#eee;color:#555;}
-.urgent-badge{background:#fde8e4;color:#CC2200;}
-.overdue-text{color:#CC2200;font-weight:600;}
-.done-text{text-decoration:line-through;color:#888;}
-.count{font-size:12px;font-weight:400;color:#888;margin-left:4px;}
-.empty{font-size:13px;color:#aaa;font-style:italic;padding:8px 0;}
-.summary{background:#fff;border-radius:8px;border:1px solid #e0e0e0;padding:16px;margin-bottom:20px;display:flex;gap:20px;flex-wrap:wrap;}
-.stat{text-align:center;flex:1;min-width:80px;}
-.stat-num{font-size:28px;font-weight:700;line-height:1.2;}
-.stat-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.05em;}
-.stat-num.danger{color:#CC2200;}
-.stat-num.accent{color:#0033CC;}
-.stat-num.success{color:#00875A;}`;
-
-  const renderRow = (item, showDue = true) => {
-    const acc = data.accounts.find(a => a.name === item.account);
-    const accColor = acc ? acc.color : '#888';
-    const due = item.dueDate ? new Date(item.dueDate + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short' }) : '—';
-    const urgentMark = item._urgent ? '<span class="badge urgent-badge">Urgent</span>' : '';
-    const isOverdue = item.dueDate && new Date(item.dueDate + 'T23:59:59') < today && !item._done;
-    return `<tr>
-      <td class="${isOverdue ? 'overdue-text' : ''} ${item._done ? 'done-text' : ''}">${urgentMark}${item.text}</td>
-      <td><span class="badge acc-badge" style="color:${accColor};background:${accColor}11;">${item.account}</span></td>
-      ${showDue ? `<td style="white-space:nowrap;color:${isOverdue ? '#CC2200' : '#888'};">${due}</td>` : ''}
-      ${item._done && item.completedAt ? `<td style="white-space:nowrap;color:#00875A;font-size:12px;">${new Date(item.completedAt).toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</td>` : ''}
-    </tr>`;
-  };
-
-  const renderTable = (items, showDue = true, showCompleted = false) => {
-    if (!items.length) return '<p class="empty">None</p>';
-    return `<table><thead><tr><th>Item</th><th>Account</th>${showDue ? '<th>Due</th>' : ''}${showCompleted ? '<th>Done</th>' : ''}</tr></thead><tbody>` +
-      items.map(i => renderRow(i, showDue)).join('') + '</tbody></table>';
-  };
-
-  // Group items by work type, ordered by WORK_TYPES priority, with sub-headers
-  const renderGrouped = (items, showDue = true, showCompleted = false) => {
-    if (!items.length) return '<p class="empty">None</p>';
-    // Build groups in WORK_TYPES order, then any remaining
-    const grouped = new Map();
-    WORK_TYPES.forEach(wt => { const g = items.filter(i => i.category === wt.key); if (g.length) grouped.set(wt.key, g); });
-    const assigned = new Set(WORK_TYPES.map(w => w.key));
-    const other = items.filter(i => !assigned.has(i.category));
-    if (other.length) grouped.set('_other', other);
-
-    if (grouped.size === 1) {
-      // Single group — show header but no need for extra nesting
-      const [key, group] = [...grouped.entries()][0];
-      const wt = key === '_other' ? getWt('') : getWt(key);
-      return `<div class="wt-group"><div class="wt-header" style="background:${wt.bg};color:${wt.color};">${wt.label} · ${group.length}</div>${renderTable(group, showDue, showCompleted)}</div>`;
-    }
-
-    let out = '';
-    for (const [key, group] of grouped) {
-      const wt = key === '_other' ? getWt('') : getWt(key);
-      out += `<div class="wt-group"><div class="wt-header" style="background:${wt.bg};color:${wt.color};">${wt.label} · ${group.length}</div>${renderTable(group, showDue, showCompleted)}</div>`;
-    }
-    return out;
-  };
-
-  let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${styles}</style></head><body>`;
-  html += `<h1>TrigPoint Weekly Digest</h1>`;
-  html += `<p class="meta">${now.toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}</p>`;
-
-  // Summary stats
-  html += `<div class="summary">
-    <div class="stat"><div class="stat-num danger">${overdue.length}</div><div class="stat-label">Overdue</div></div>
-    <div class="stat"><div class="stat-num accent">${dueThisWeek.length}</div><div class="stat-label">This week</div></div>
-    <div class="stat"><div class="stat-num success">${completedRecently.length}</div><div class="stat-label">Done (7d)</div></div>
-    <div class="stat"><div class="stat-num">${active.length}</div><div class="stat-label">Total active</div></div>
-  </div>`;
-
-  // Overdue
-  if (overdue.length) {
-    html += `<div class="section"><div class="section-title overdue">⚠ Overdue<span class="count">(${overdue.length})</span></div>`;
-    overdue.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-    html += renderGrouped(overdue);
-    html += `</div>`;
-  }
-
-  // Due this week
-  html += `<div class="section"><div class="section-title this-week">Due This Week<span class="count">(${dueThisWeek.length})</span></div>`;
-  dueThisWeek.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-  html += renderGrouped(dueThisWeek);
-  html += `</div>`;
-
-  // Completed recently
-  if (completedRecently.length) {
-    html += `<div class="section"><div class="section-title completed">Completed This Week<span class="count">(${completedRecently.length})</span></div>`;
-    completedRecently.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
-    html += renderGrouped(completedRecently, false, true);
-    html += `</div>`;
-  }
-
-  // Items with no due date
-  if (noDueDate.length) {
-    html += `<div class="section"><div class="section-title no-date">No Due Date<span class="count">(${noDueDate.length})</span></div>`;
-    const urgentNoDue = noDueDate.filter(i => i._urgent);
-    const normalNoDue = noDueDate.filter(i => !i._urgent);
-    html += renderGrouped([...urgentNoDue, ...normalNoDue], false);
-    html += `</div>`;
-  }
-
-  // Due later (beyond this week)
-  if (dueLater.length) {
-    html += `<div class="section"><div class="section-title upcoming">Upcoming<span class="count">(${dueLater.length})</span></div>`;
-    dueLater.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-    html += renderGrouped(dueLater);
-    html += `</div>`;
-  }
-
-  html += `</body></html>`;
-  return html;
-}
-
-async function sendDigest() {
-  if (!cloudUrl) { toast('No cloud URL configured — set it in Cloud settings'); return; }
-  const html = buildDigestHtml();
-  const active = data.items.filter(i => !i._deleted && !i._done);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const overdueCount = active.filter(i => i.dueDate && new Date(i.dueDate + 'T23:59:59') < today).length;
-  toast('Sending digest…');
-  try {
-    const res = await fetch(cloudUrl, {
-      method: 'POST', redirect: 'follow',
-      body: JSON.stringify({
-        key: cloudKey, action: 'digest', digestHtml: html,
-        itemCount: active.length, overdueCount: overdueCount,
-        generatedAt: new Date().toISOString()
-      })
-    });
-    const result = JSON.parse(await res.text());
-    toast(result.success ? 'Digest sent ✓' : 'Digest failed — check Apps Script');
-  } catch (e) { console.error(e); toast('Digest send failed'); }
-}
-
-document.getElementById('digest-btn').addEventListener('click', () => {
-  const active = data.items.filter(i => !i._deleted && !i._done);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const overdueCount = active.filter(i => i.dueDate && new Date(i.dueDate + 'T23:59:59') < today).length;
-  const weekFromNow = new Date(today); weekFromNow.setDate(today.getDate() + 7);
-  const dueThisWeekCount = active.filter(i => i.dueDate && new Date(i.dueDate + 'T00:00:00') >= today && new Date(i.dueDate + 'T00:00:00') < weekFromNow).length;
-  openModal(
-    'Send Weekly Digest',
-    `${active.length} active items${overdueCount ? ` · ${overdueCount} overdue` : ''}${dueThisWeekCount ? ` · ${dueThisWeekCount} due this week` : ''}`,
-    null, sendDigest, 'Send'
-  );
-});
 
 // ═══ INIT ═══
 renderAccountDropdown();
