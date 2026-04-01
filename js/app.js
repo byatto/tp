@@ -1444,6 +1444,7 @@ setTimeout(checkColourPrompt, 500);
 let _widgetWindow = null;
 
 function openCaptureWidget() {
+  // If already open, just bring it to the front
   if (_widgetWindow && !_widgetWindow.closed) {
     _widgetWindow.focus();
     return;
@@ -1455,172 +1456,17 @@ function openCaptureWidget() {
   const left = Math.max(0, screenW - W - 24);
   const top  = Math.max(0, screenH - H - 60);
 
-  const theme    = localStorage.getItem(THEME_KEY) || 'light';
-  const accounts = data.accounts || DEFAULT_ACCOUNTS;
-  const activeAcc = activeAccount || accounts[0]?.name || 'Personal';
-
-  const accOptions = accounts.map(a =>
-    `<option value="${_wEsc(a.name)}" ${a.name === activeAcc ? 'selected' : ''}>${_wEsc(a.name)}</option>`
-  ).join('');
-
-  const isDark = theme === 'dark';
-  const v = isDark ? {
-    bg:'#0D0D0D', surface:'#1A1A1A', text:'#F0F0F0', muted:'#666666',
-    border:'#333333', accent:'#4D7CFF', accentG:'rgba(77,124,255,0.15)',
-    toast:'#F0F0F0', toastT:'#111111'
-  } : {
-    bg:'#FAFAFA', surface:'#FFFFFF', text:'#111111', muted:'#888888',
-    border:'#E0E0E0', accent:'#0033CC', accentG:'rgba(0,51,204,0.10)',
-    toast:'#111111', toastT:'#FFFFFF'
-  };
-
-  const widgetHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>TrigPoint — Capture</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    font-family: 'Inter', -apple-system, sans-serif;
-    background: ${v.bg}; color: ${v.text};
-    height: 100vh; display: flex; flex-direction: column;
-    overflow: hidden; -webkit-font-smoothing: antialiased;
-  }
-  header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 14px; background: ${v.surface};
-    border-bottom: 1px solid ${v.border}; flex-shrink: 0; gap: 10px;
-  }
-  .logo { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
-  .logo-mark {
-    width: 22px; height: 22px; background: ${v.accent};
-    border-radius: 5px; display: flex; align-items: center; justify-content: center;
-  }
-  .logo-mark svg { width: 13px; height: 13px; fill: white; }
-  .logo-text { font-size: 13px; font-weight: 700; letter-spacing: -0.2px; color: ${v.text}; }
-  .acc-select {
-    flex: 1; min-width: 0; padding: 6px 10px;
-    background: ${v.bg}; color: ${v.text};
-    border: 1px solid ${v.border}; border-radius: 100px;
-    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
-    cursor: pointer; outline: none; max-width: 180px;
-  }
-  .acc-select:focus { border-color: ${v.accent}; }
-  main {
-    flex: 1; display: flex; flex-direction: column;
-    padding: 12px 14px 14px; gap: 10px; min-height: 0;
-  }
-  textarea {
-    flex: 1; width: 100%; padding: 12px 14px;
-    background: ${v.surface}; color: ${v.text};
-    border: 1px solid ${v.border}; border-radius: 8px;
-    font-family: 'Inter', sans-serif; font-size: 14px;
-    line-height: 1.55; resize: none; outline: none; min-height: 0;
-    transition: border-color 0.15s ease;
-  }
-  textarea::placeholder { color: ${v.muted}; }
-  textarea:focus { border-color: ${v.accent}; box-shadow: 0 0 0 3px ${v.accentG}; }
-  .log-btn {
-    width: 100%; padding: 11px; background: ${v.accent}; color: #fff;
-    border: none; border-radius: 6px; font-family: 'Inter', sans-serif;
-    font-size: 14px; font-weight: 600; cursor: pointer;
-    letter-spacing: -0.1px; transition: opacity 0.15s, transform 0.1s; flex-shrink: 0;
-  }
-  .log-btn:hover  { opacity: 0.88; }
-  .log-btn:active { transform: scale(0.98); opacity: 0.75; }
-  .hint {
-    text-align: center; font-size: 11px; color: ${v.muted};
-    flex-shrink: 0; margin-top: -4px;
-  }
-  .feedback {
-    position: fixed; bottom: 14px; left: 50%;
-    transform: translateX(-50%) translateY(10px);
-    background: ${v.toast}; color: ${v.toastT};
-    padding: 8px 18px; border-radius: 100px;
-    font-size: 13px; font-weight: 500; opacity: 0;
-    pointer-events: none; transition: opacity 0.2s, transform 0.2s;
-    white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  }
-  .feedback.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-</style>
-</head>
-<body>
-<header>
-  <div class="logo">
-    <div class="logo-mark">
-      <svg viewBox="0 0 24 24"><path d="M12 3L22 20H2L12 3Z M12 16a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>
-    </div>
-    <span class="logo-text">TrigPoint</span>
-  </div>
-  <select class="acc-select" id="acc-select">${accOptions}</select>
-</header>
-<main>
-  <textarea id="txt" placeholder="Capture anything…" autofocus spellcheck="true"></textarea>
-  <button class="log-btn" id="log-btn">Log to Inbox</button>
-  <p class="hint">Ctrl + Enter to log</p>
-</main>
-<div class="feedback" id="feedback">Logged ✓</div>
-<script>
-  const SK = 'trigpoint_v2_data';
-  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
-  function doLog() {
-    const txt = document.getElementById('txt').value.trim();
-    if (!txt) return;
-    const acc = document.getElementById('acc-select').value;
-    let stored = { items: [], accounts: [] };
-    try { stored = JSON.parse(localStorage.getItem(SK) || '{}'); } catch(e) {}
-    if (!Array.isArray(stored.items)) stored.items = [];
-    stored.items.unshift({
-      id: uid(), text: txt, account: acc, type: '', status: 'inbox',
-      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-      _tct: false, _deleted: false, _done: false, dueDate: null, completedAt: null
-    });
-    localStorage.setItem(SK, JSON.stringify(stored));
-    document.getElementById('txt').value = '';
-    document.getElementById('txt').focus();
-    const fb = document.getElementById('feedback');
-    fb.classList.add('show');
-    setTimeout(() => fb.classList.remove('show'), 1800);
-  }
-  document.getElementById('log-btn').addEventListener('click', doLog);
-  document.getElementById('txt').addEventListener('keydown', e => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doLog(); }
-  });
-  window.addEventListener('storage', e => {
-    if (e.key !== SK) return;
-    try {
-      const d = JSON.parse(e.newValue || '{}');
-      const accounts = d.accounts || [];
-      if (!accounts.length) return;
-      const sel = document.getElementById('acc-select');
-      const cur = sel.value;
-      sel.innerHTML = accounts.map(a =>
-        '<option value="' + a.name.replace(/"/g,'&quot;') + '" ' + (a.name===cur?'selected':'') + '>' + a.name.replace(/</g,'&lt;') + '</option>'
-      ).join('');
-    } catch(err) {}
-  });
-<\/script>
-</body>
-</html>`;
-
-  const blob = new Blob([widgetHTML], { type: 'text/html' });
-  const blobUrl = URL.createObjectURL(blob);
-
   _widgetWindow = window.open(
-    blobUrl, 'tp_capture_widget',
+    '/widget.html',
+    'tp_capture_widget',
     `width=${W},height=${H},left=${left},top=${top},resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no`
   );
 
   if (!_widgetWindow) {
     alert('Popup blocked.\n\nPlease allow popups for this site in your browser settings, then click + again.\n\nIn Chrome: click the blocked popup icon in the address bar → "Always allow".');
-    URL.revokeObjectURL(blobUrl);
     return;
   }
 
-  _widgetWindow.addEventListener('load', () => URL.revokeObjectURL(blobUrl));
   _widgetWindow.focus();
 }
 
@@ -1636,10 +1482,5 @@ window.addEventListener('storage', e => {
   } catch(err) {}
   renderAll(); updateBadge(); updateStats();
 });
-
-function _wEsc(s) {
-  if (typeof s !== 'string') return '';
-  return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
 
 document.getElementById('open-widget').addEventListener('click', openCaptureWidget);
