@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrigPoint — Capture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='16' fill='%230033CC'/%3E%3Cpath d='M50 20 L75 70 L25 70 Z' fill='none' stroke='white' stroke-width='6'/%3E%3Ccircle cx='50' cy='52' r='5' fill='white'/%3E%3C/svg%3E" type="image/svg+xml">
+<style>
+  /* ── Theme tokens — set by JS on load, fallback to light ── */
+  :root {
+    --bg:      #FAFAFA;
+    --surface: #FFFFFF;
+    --text:    #111111;
+    --muted:   #888888;
+    --border:  #E0E0E0;
+    --accent:  #0033CC;
+    --glow:    rgba(0,51,204,0.10);
+    --toast:   #111111;
+    --toastT:  #FFFFFF;
+    --radius:  8px;
+    --font:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    gap: 10px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-shrink: 0;
+    text-decoration: none;
+  }
+  .logo-mark {
+    width: 22px; height: 22px;
+    background: var(--accent);
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo-mark svg { width: 13px; height: 13px; fill: white; }
+  .logo-text {
+    font-size: 13px; font-weight: 700; letter-spacing: -0.2px;
+    color: var(--text);
+  }
+
+  .acc-select {
+    flex: 1;
+    min-width: 0;
+    max-width: 180px;
+    padding: 6px 10px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .acc-select:focus { border-color: var(--accent); }
+
+  /* ── Main ── */
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 14px 14px;
+    gap: 10px;
+    min-height: 0;
+  }
+
+  textarea {
+    flex: 1;
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.55;
+    resize: none;
+    outline: none;
+    min-height: 0;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  textarea::placeholder { color: var(--muted); }
+  textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow);
+  }
+
+  .log-btn {
+    width: 100%;
+    padding: 11px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: -0.1px;
+    transition: opacity 0.15s, transform 0.1s;
+    flex-shrink: 0;
+  }
+  .log-btn:hover  { opacity: 0.88; }
+  .log-btn:active { transform: scale(0.98); opacity: 0.75; }
+
+  .hint {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+    margin-top: -4px;
+  }
+
+  /* ── Logged feedback toast ── */
+  .feedback {
+    position: fixed;
+    bottom: 14px; left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: var(--toast);
+    color: var(--toastT);
+    padding: 8px 18px;
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .feedback.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24"><path d="M12 3L22 20H2L12 3Z M12 16a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>
+    </div>
+    <span class="logo-text">TrigPoint</span>
+  </div>
+  <select class="acc-select" id="acc-select"></select>
+</header>
+
+<main>
+  <textarea id="txt" placeholder="Capture anything…" autofocus spellcheck="true"></textarea>
+  <button class="log-btn" id="log-btn">Log to Inbox</button>
+  <p class="hint">Ctrl + Enter to log</p>
+</main>
+
+<div class="feedback" id="feedback">Logged ✓</div>
+
+<script>
+  // ── Storage keys — must match app.js exactly ──────────────────────────────
+  const STORAGE_KEY        = 'trigpoint_v2_data';
+  const THEME_KEY          = 'trigpoint_v2_theme';
+  const ACTIVE_ACCOUNT_KEY = 'trigpoint_v2_account';
+
+  const DEFAULT_ACCOUNTS = [
+    { name: 'Personal', color: '#0033CC' },
+    { name: 'Work',     color: '#00875A' }
+  ];
+
+  // ── Apply theme from localStorage ────────────────────────────────────────
+  function applyTheme() {
+    const theme = localStorage.getItem(THEME_KEY) || 'light';
+    const dark  = theme === 'dark';
+    const r = document.documentElement.style;
+    if (dark) {
+      r.setProperty('--bg',      '#0D0D0D');
+      r.setProperty('--surface', '#1A1A1A');
+      r.setProperty('--text',    '#F0F0F0');
+      r.setProperty('--muted',   '#666666');
+      r.setProperty('--border',  '#333333');
+      r.setProperty('--accent',  '#4D7CFF');
+      r.setProperty('--glow',    'rgba(77,124,255,0.15)');
+      r.setProperty('--toast',   '#F0F0F0');
+      r.setProperty('--toastT',  '#111111');
+    } else {
+      r.setProperty('--bg',      '#FAFAFA');
+      r.setProperty('--surface', '#FFFFFF');
+      r.setProperty('--text',    '#111111');
+      r.setProperty('--muted',   '#888888');
+      r.setProperty('--border',  '#E0E0E0');
+      r.setProperty('--accent',  '#0033CC');
+      r.setProperty('--glow',    'rgba(0,51,204,0.10)');
+      r.setProperty('--toast',   '#111111');
+      r.setProperty('--toastT',  '#FFFFFF');
+    }
+  }
+
+  // ── Populate account selector ─────────────────────────────────────────────
+  function populateAccounts() {
+    let accounts = DEFAULT_ACCOUNTS;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (Array.isArray(d.accounts) && d.accounts.length) {
+          accounts = d.accounts;
+        }
+      }
+    } catch (e) {}
+
+    const active = localStorage.getItem(ACTIVE_ACCOUNT_KEY) || accounts[0]?.name || '';
+    const sel    = document.getElementById('acc-select');
+
+    sel.innerHTML = accounts.map(a =>
+      `<option value="${esc(a.name)}" ${a.name === active ? 'selected' : ''}>${esc(a.name)}</option>`
+    ).join('');
+  }
+
+  // ── Log item ──────────────────────────────────────────────────────────────
+  function doLog() {
+    const txt = document.getElementById('txt').value.trim();
+    if (!txt) return;
+
+    const accName = document.getElementById('acc-select').value;
+
+    let stored = { items: [], accounts: [] };
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) stored = JSON.parse(raw);
+    } catch (e) {}
+    if (!Array.isArray(stored.items)) stored.items = [];
+
+    const item = {
+      id:          Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      text:        txt,
+      account:     accName,
+      type:        '',
+      status:      'inbox',
+      createdAt:   new Date().toISOString(),
+      updatedAt:   new Date().toISOString(),
+      _tct:        false,
+      _deleted:    false,
+      _done:       false,
+      dueDate:     null,
+      completedAt: null
+    };
+
+    stored.items.unshift(item);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+
+    // Clear + focus + toast
+    document.getElementById('txt').value = '';
+    document.getElementById('txt').focus();
+    showFeedback();
+  }
+
+  function showFeedback() {
+    const fb = document.getElementById('feedback');
+    fb.classList.add('show');
+    setTimeout(() => fb.classList.remove('show'), 1800);
+  }
+
+  // ── Escape helper ─────────────────────────────────────────────────────────
+  function esc(s) {
+    if (typeof s !== 'string') return '';
+    return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── React to main app changes (theme toggle, account add/remove) ──────────
+  window.addEventListener('storage', e => {
+    if (e.key === THEME_KEY)   { applyTheme(); return; }
+    if (e.key === STORAGE_KEY) { populateAccounts(); }
+  });
+
+  // ── Wire events ───────────────────────────────────────────────────────────
+  document.getElementById('log-btn').addEventListener('click', doLog);
+  document.getElementById('txt').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      doLog();
+    }
+  });
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  applyTheme();
+  populateAccounts();
+</script>
+</body>
+</html>
