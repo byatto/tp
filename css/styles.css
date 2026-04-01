@@ -125,6 +125,20 @@ header {
 .icon-btn-header:hover { background: var(--bg-hover); color: var(--text); }
 .icon-btn-header svg { width: 18px; height: 18px; fill: currentColor; }
 
+/* ═══ WIDGET LAUNCH BUTTON ═══ */
+.widget-launch-btn {
+  font-size: 22px !important;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--accent) !important;
+}
+.widget-launch-btn:hover {
+  background: var(--accent-glow) !important;
+  color: var(--accent) !important;
+  transform: scale(1.1);
+}
+.widget-launch-btn:active { transform: scale(0.95); }
+
 /* Desktop Nav */
 nav.desktop-nav {
   display: flex; gap: 4px; background: var(--bg-nav);
@@ -170,7 +184,6 @@ main { padding: 16px 0; min-height: 60vh; }
 /* ═══ CAPTURE VIEW ═══ */
 .capture-view { display: flex; flex-direction: column; gap: 16px; }
 
-/* Account indicator strip above capture textarea */
 .capture-account-indicator {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 12px; border-radius: var(--radius);
@@ -218,7 +231,6 @@ main { padding: 16px 0; min-height: 60vh; }
 .view-title { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
 .view-count { font-size: 13px; color: var(--text-muted); }
 
-/* Cross-account inbox badge */
 .cross-account-notice {
   display: flex; align-items: center; gap: 8px; padding: 8px 12px;
   background: var(--accent-glow); border: 1px solid var(--accent);
@@ -247,7 +259,6 @@ main { padding: 16px 0; min-height: 60vh; }
 .card:hover { box-shadow: var(--shadow-md); }
 .card.focused { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
 
-/* Swipe delete reveal */
 .card-swipe-delete {
   position: absolute; right: 0; top: 0; bottom: 0;
   width: 80px; background: var(--danger);
@@ -276,7 +287,6 @@ main { padding: 16px 0; min-height: 60vh; }
 }
 .card-text-header { margin-bottom: 4px; }
 
-/* Review: category buttons with confirm step */
 .cat-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
 .cat-btn {
   padding: 7px 4px; font-family: var(--font);
@@ -288,7 +298,6 @@ main { padding: 16px 0; min-height: 60vh; }
 .cat-btn:hover { background: var(--bg-hover); color: var(--text-secondary); }
 .cat-btn.selected { border-color: transparent; }
 
-/* File confirm button — appears after category selected */
 .file-confirm-row {
   display: none; gap: 8px; margin-bottom: 12px; align-items: center;
 }
@@ -324,7 +333,7 @@ main { padding: 16px 0; min-height: 60vh; }
 .action-btn.delete:hover { background: var(--danger-bg); color: var(--danger); }
 .action-btn svg { width: 16px; height: 16px; fill: currentColor; }
 
-/* ═══ BROWSE VIEW (formerly Retrieve) ═══ */
+/* ═══ BROWSE VIEW ═══ */
 .search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
 .search-wrap { flex: 1; position: relative; }
 .search-input {
@@ -376,7 +385,7 @@ main { padding: 16px 0; min-height: 60vh; }
 }
 .cat-badge.uncategorised { background: var(--bg-hover); color: var(--text-muted); }
 
-/* ═══ SETTINGS PANEL (gear icon slideout) ═══ */
+/* ═══ SETTINGS PANEL ═══ */
 .settings-panel-overlay {
   position: fixed; inset: 0; background: var(--modal-overlay);
   backdrop-filter: blur(4px); z-index: 450;
@@ -415,7 +424,6 @@ main { padding: 16px 0; min-height: 60vh; }
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
 
-/* Sync row at top of settings panel */
 .sync-row {
   display: flex; align-items: center; gap: 10px;
   padding: 12px; background: var(--bg-surface); border: 1px solid var(--border);
@@ -639,7 +647,6 @@ main { padding: 16px 0; min-height: 60vh; }
   padding: 2px 6px; border-radius: 4px; margin-right: 4px;
 }
 
-/* Type buttons (replaces cat-buttons in review) */
 .type-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
 .type-btn {
   padding: 7px 4px; font-family: var(--font);
@@ -695,7 +702,6 @@ main { padding: 16px 0; min-height: 60vh; }
 }
 .wr-acc-count { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
 
-/* WR card view */
 .wr-card-view { padding: 0; }
 .wr-progress { height: 4px; background: var(--border); border-radius: 2px; margin-bottom: 4px; overflow: hidden; }
 .wr-progress-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s ease; }
@@ -761,7 +767,6 @@ main { padding: 16px 0; min-height: 60vh; }
 .wr-summary-total { font-size: 14px; color: var(--text-secondary); margin-top: 16px; }
 .wr-summary-change { color: var(--text-muted); font-size: 12px; }
 
-/* Settings review meta */
 .settings-review-meta { font-size: 11px; color: var(--text-muted); font-family: var(--mono); }
 .subtle-btn.accent { color: var(--accent); border-color: var(--accent); font-weight: 600; }
 .subtle-btn.accent:hover { background: var(--accent-glow); }
