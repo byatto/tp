@@ -42,11 +42,9 @@ function migrateV2toV3(d) {
   };
 
   d.items.forEach(item => {
-    // Map category → type
     if (item.category !== undefined && item.type === undefined) {
       item.type = catMap[item.category] || (item.category ? 'action' : '');
     }
-    // Rename _urgent → _tct
     if (item._urgent !== undefined && item._tct === undefined) {
       item._tct = item._urgent;
       delete item._urgent;
@@ -55,16 +53,13 @@ function migrateV2toV3(d) {
     if (item.type === undefined) item.type = '';
   });
 
-  // Replace categories with types
   d.types = DEFAULT_TYPES;
 
-  // Merge duplicate accounts (e.g. DSTL and dstl)
   const seen = new Map();
   d.accounts.forEach(acc => {
     const lower = acc.name.toLowerCase();
     if (!seen.has(lower)) { seen.set(lower, acc); }
     else {
-      // Merge: reassign items from duplicate to canonical
       const canonical = seen.get(lower);
       d.items.forEach(item => { if (item.account === acc.name) item.account = canonical.name; });
     }
@@ -330,7 +325,6 @@ function searchItems(query, typeFilter, sort) {
       return new Date(a.createdAt) - new Date(b.createdAt);
     });
   } else if (sort === 'age') {
-    // TCT first, then oldest first
     results.sort((a, b) => {
       if (a._tct && !b._tct) return -1;
       if (!a._tct && b._tct) return 1;
@@ -617,7 +611,6 @@ function renderReview() {
     </div>`;
   }).join('');
 
-  // Type select
   list.querySelectorAll('.type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const itemId = btn.dataset.id;
@@ -637,7 +630,6 @@ function renderReview() {
     });
   });
 
-  // Confirm filing
   list.querySelectorAll('.file-confirm-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const type = btn.dataset.type;
@@ -647,7 +639,6 @@ function renderReview() {
     });
   });
 
-  // Cancel filing
   list.querySelectorAll('.file-cancel-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const itemId = btn.dataset.id;
@@ -668,7 +659,6 @@ function renderReview() {
   }));
 }
 
-// Shared card action wiring for review + browse
 function wireCardActions(container, onUpdate) {
   container.querySelectorAll('.action-btn.done-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -706,7 +696,6 @@ function wireCardActions(container, onUpdate) {
       if (item && item.text !== el.value.trim()) { updateItem(el.dataset.id, { text: el.value.trim() }); toast('Updated'); }
     });
   });
-  // TCT toggle
   container.querySelectorAll('.action-btn.tct-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const ok = toggleTCT(btn.dataset.id);
@@ -752,13 +741,11 @@ function renderBrowse() {
     return;
   }
 
-  // Separate TCT items
   const tctItems = results.filter(i => i._tct);
   const otherItems = results.filter(i => !i._tct);
 
   let html = '';
 
-  // TCT section
   if (tctItems.length) {
     html += `<div class="tct-section">
       <div class="tct-section-header">
@@ -769,7 +756,6 @@ function renderBrowse() {
     </div>`;
   }
 
-  // Remaining items
   if (allAccounts) {
     const groups = new Map();
     otherItems.forEach(item => {
@@ -893,7 +879,6 @@ let wrIndex = 0;
 let wrStats = { kept: 0, done: 0, killed: 0, edited: 0, tct: 0 };
 
 function startWeeklyReview() {
-  // Close settings panel if open
   document.getElementById('settings-panel-overlay').classList.remove('open');
   document.getElementById('review-banner').classList.add('hidden');
 
@@ -901,7 +886,6 @@ function startWeeklyReview() {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  // Sort: overdue first, then stale, then healthy, then note/someday last
   const overdue = active.filter(i => i.dueDate && new Date(i.dueDate + 'T23:59:59') < today && i.type !== 'note' && i.type !== 'someday');
   const stale = active.filter(i => !i.dueDate && getAgeDays(i.createdAt) >= 14 && i.type !== 'note' && i.type !== 'someday' && !overdue.includes(i));
   const healthy = active.filter(i => i.type !== 'note' && i.type !== 'someday' && !overdue.includes(i) && !stale.includes(i));
@@ -929,7 +913,6 @@ function renderWROverview(active, overdue, stale) {
   const lastReview = localStorage.getItem(LAST_REVIEW_KEY);
   const daysSince = lastReview ? Math.floor((Date.now() - new Date(lastReview).getTime()) / 86400000) : null;
 
-  // Count by account
   const byCounts = {};
   active.forEach(i => { byCounts[i.account] = (byCounts[i.account] || 0) + 1; });
 
@@ -979,7 +962,6 @@ function renderWRCard() {
     statusLine = `<span class="wr-status stale">Stale — ${ageDays} days old</span>`;
   }
 
-  // Type-specific prompt
   let prompt = '';
   if (item.type === 'waiting') prompt = '<div class="wr-prompt">Still waiting? Chase or kill?</div>';
   else if (item.type === 'project') prompt = '<div class="wr-prompt">What\'s the actual next action here?</div>';
@@ -1018,36 +1000,20 @@ function renderWRCard() {
     </div>`;
 
   document.getElementById('wr-keep').addEventListener('click', () => {
-    applyWREdits(item);
-    wrStats.kept++;
-    wrIndex++;
-    renderWRCard();
+    applyWREdits(item); wrStats.kept++; wrIndex++; renderWRCard();
   });
-
   document.getElementById('wr-done').addEventListener('click', () => {
-    applyWREdits(item);
-    markDone(item.id);
-    wrStats.done++;
-    wrIndex++;
-    renderWRCard();
+    applyWREdits(item); markDone(item.id); wrStats.done++; wrIndex++; renderWRCard();
   });
-
   document.getElementById('wr-kill').addEventListener('click', () => {
-    deleteItem(item.id);
-    wrStats.killed++;
-    wrIndex++;
-    renderWRCard();
+    deleteItem(item.id); wrStats.killed++; wrIndex++; renderWRCard();
   });
 
   const tctBtn = document.getElementById('wr-tct');
   if (tctBtn) {
     tctBtn.addEventListener('click', () => {
-      applyWREdits(item);
-      toggleTCT(item.id);
-      wrStats.tct++;
-      wrStats.kept++;
-      wrIndex++;
-      renderWRCard();
+      applyWREdits(item); toggleTCT(item.id);
+      wrStats.tct++; wrStats.kept++; wrIndex++; renderWRCard();
     });
   }
 }
@@ -1086,12 +1052,10 @@ function renderWRSummary() {
     </div>`;
 
   document.getElementById('wr-finish-btn').addEventListener('click', () => {
-    renderAll();
-    switchView('browse');
+    renderAll(); switchView('browse');
   });
 }
 
-// Review banner
 function checkReviewBanner() {
   const banner = document.getElementById('review-banner');
   if (!banner) return;
@@ -1121,10 +1085,8 @@ document.getElementById('review-banner-snooze')?.addEventListener('click', () =>
   localStorage.setItem(REVIEW_SNOOZE_KEY, (Date.now() + 86400000).toString());
   document.getElementById('review-banner').classList.add('hidden');
 });
-
 document.getElementById('start-weekly-review-btn')?.addEventListener('click', startWeeklyReview);
 
-// Update settings review meta
 function updateReviewMeta() {
   const el = document.getElementById('settings-review-meta');
   if (!el) return;
@@ -1244,7 +1206,6 @@ function updateStatsLabel() {
   if (purgeBtn) purgeBtn.classList.toggle('hidden', deleted === 0);
 }
 
-// Settings actions
 document.getElementById('sync-btn').addEventListener('click', () => {
   if (cloudUrl) pullFromCloud();
   else document.getElementById('cloud-btn').click();
@@ -1299,7 +1260,6 @@ document.getElementById('import-file').addEventListener('change', e => {
         });
       }
       data.items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      // Re-run migration on imported data
       localStorage.removeItem(MIGRATED_KEY);
       data = migrateV2toV3(data);
       saveData(); renderAll();
@@ -1475,3 +1435,211 @@ updateCaptureIndicator();
 renderAll();
 if (window.innerWidth > 600) captureInput.focus();
 setTimeout(checkColourPrompt, 500);
+
+
+// ═══════════════════════════════════════════════════════════
+// QUICK CAPTURE WIDGET
+// ═══════════════════════════════════════════════════════════
+
+let _widgetWindow = null;
+
+function openCaptureWidget() {
+  if (_widgetWindow && !_widgetWindow.closed) {
+    _widgetWindow.focus();
+    return;
+  }
+
+  const W = 400, H = 280;
+  const screenW = window.screen.availWidth  || window.screen.width;
+  const screenH = window.screen.availHeight || window.screen.height;
+  const left = Math.max(0, screenW - W - 24);
+  const top  = Math.max(0, screenH - H - 60);
+
+  const theme    = localStorage.getItem(THEME_KEY) || 'light';
+  const accounts = data.accounts || DEFAULT_ACCOUNTS;
+  const activeAcc = activeAccount || accounts[0]?.name || 'Personal';
+
+  const accOptions = accounts.map(a =>
+    `<option value="${_wEsc(a.name)}" ${a.name === activeAcc ? 'selected' : ''}>${_wEsc(a.name)}</option>`
+  ).join('');
+
+  const isDark = theme === 'dark';
+  const v = isDark ? {
+    bg:'#0D0D0D', surface:'#1A1A1A', text:'#F0F0F0', muted:'#666666',
+    border:'#333333', accent:'#4D7CFF', accentG:'rgba(77,124,255,0.15)',
+    toast:'#F0F0F0', toastT:'#111111'
+  } : {
+    bg:'#FAFAFA', surface:'#FFFFFF', text:'#111111', muted:'#888888',
+    border:'#E0E0E0', accent:'#0033CC', accentG:'rgba(0,51,204,0.10)',
+    toast:'#111111', toastT:'#FFFFFF'
+  };
+
+  const widgetHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TrigPoint — Capture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: ${v.bg}; color: ${v.text};
+    height: 100vh; display: flex; flex-direction: column;
+    overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; background: ${v.surface};
+    border-bottom: 1px solid ${v.border}; flex-shrink: 0; gap: 10px;
+  }
+  .logo { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+  .logo-mark {
+    width: 22px; height: 22px; background: ${v.accent};
+    border-radius: 5px; display: flex; align-items: center; justify-content: center;
+  }
+  .logo-mark svg { width: 13px; height: 13px; fill: white; }
+  .logo-text { font-size: 13px; font-weight: 700; letter-spacing: -0.2px; color: ${v.text}; }
+  .acc-select {
+    flex: 1; min-width: 0; padding: 6px 10px;
+    background: ${v.bg}; color: ${v.text};
+    border: 1px solid ${v.border}; border-radius: 100px;
+    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+    cursor: pointer; outline: none; max-width: 180px;
+  }
+  .acc-select:focus { border-color: ${v.accent}; }
+  main {
+    flex: 1; display: flex; flex-direction: column;
+    padding: 12px 14px 14px; gap: 10px; min-height: 0;
+  }
+  textarea {
+    flex: 1; width: 100%; padding: 12px 14px;
+    background: ${v.surface}; color: ${v.text};
+    border: 1px solid ${v.border}; border-radius: 8px;
+    font-family: 'Inter', sans-serif; font-size: 14px;
+    line-height: 1.55; resize: none; outline: none; min-height: 0;
+    transition: border-color 0.15s ease;
+  }
+  textarea::placeholder { color: ${v.muted}; }
+  textarea:focus { border-color: ${v.accent}; box-shadow: 0 0 0 3px ${v.accentG}; }
+  .log-btn {
+    width: 100%; padding: 11px; background: ${v.accent}; color: #fff;
+    border: none; border-radius: 6px; font-family: 'Inter', sans-serif;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    letter-spacing: -0.1px; transition: opacity 0.15s, transform 0.1s; flex-shrink: 0;
+  }
+  .log-btn:hover  { opacity: 0.88; }
+  .log-btn:active { transform: scale(0.98); opacity: 0.75; }
+  .hint {
+    text-align: center; font-size: 11px; color: ${v.muted};
+    flex-shrink: 0; margin-top: -4px;
+  }
+  .feedback {
+    position: fixed; bottom: 14px; left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: ${v.toast}; color: ${v.toastT};
+    padding: 8px 18px; border-radius: 100px;
+    font-size: 13px; font-weight: 500; opacity: 0;
+    pointer-events: none; transition: opacity 0.2s, transform 0.2s;
+    white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .feedback.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24"><path d="M12 3L22 20H2L12 3Z M12 16a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>
+    </div>
+    <span class="logo-text">TrigPoint</span>
+  </div>
+  <select class="acc-select" id="acc-select">${accOptions}</select>
+</header>
+<main>
+  <textarea id="txt" placeholder="Capture anything…" autofocus spellcheck="true"></textarea>
+  <button class="log-btn" id="log-btn">Log to Inbox</button>
+  <p class="hint">Ctrl + Enter to log</p>
+</main>
+<div class="feedback" id="feedback">Logged ✓</div>
+<script>
+  const SK = 'trigpoint_v2_data';
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+  function doLog() {
+    const txt = document.getElementById('txt').value.trim();
+    if (!txt) return;
+    const acc = document.getElementById('acc-select').value;
+    let stored = { items: [], accounts: [] };
+    try { stored = JSON.parse(localStorage.getItem(SK) || '{}'); } catch(e) {}
+    if (!Array.isArray(stored.items)) stored.items = [];
+    stored.items.unshift({
+      id: uid(), text: txt, account: acc, type: '', status: 'inbox',
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      _tct: false, _deleted: false, _done: false, dueDate: null, completedAt: null
+    });
+    localStorage.setItem(SK, JSON.stringify(stored));
+    document.getElementById('txt').value = '';
+    document.getElementById('txt').focus();
+    const fb = document.getElementById('feedback');
+    fb.classList.add('show');
+    setTimeout(() => fb.classList.remove('show'), 1800);
+  }
+  document.getElementById('log-btn').addEventListener('click', doLog);
+  document.getElementById('txt').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doLog(); }
+  });
+  window.addEventListener('storage', e => {
+    if (e.key !== SK) return;
+    try {
+      const d = JSON.parse(e.newValue || '{}');
+      const accounts = d.accounts || [];
+      if (!accounts.length) return;
+      const sel = document.getElementById('acc-select');
+      const cur = sel.value;
+      sel.innerHTML = accounts.map(a =>
+        '<option value="' + a.name.replace(/"/g,'&quot;') + '" ' + (a.name===cur?'selected':'') + '>' + a.name.replace(/</g,'&lt;') + '</option>'
+      ).join('');
+    } catch(err) {}
+  });
+<\/script>
+</body>
+</html>`;
+
+  const blob = new Blob([widgetHTML], { type: 'text/html' });
+  const blobUrl = URL.createObjectURL(blob);
+
+  _widgetWindow = window.open(
+    blobUrl, 'tp_capture_widget',
+    `width=${W},height=${H},left=${left},top=${top},resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no`
+  );
+
+  if (!_widgetWindow) {
+    alert('Popup blocked.\n\nPlease allow popups for this site in your browser settings, then click + again.\n\nIn Chrome: click the blocked popup icon in the address bar → "Always allow".');
+    URL.revokeObjectURL(blobUrl);
+    return;
+  }
+
+  _widgetWindow.addEventListener('load', () => URL.revokeObjectURL(blobUrl));
+  _widgetWindow.focus();
+}
+
+// Refresh main app live when widget writes an item
+window.addEventListener('storage', e => {
+  if (e.key !== STORAGE_KEY) return;
+  try {
+    const updated = JSON.parse(e.newValue || '{}');
+    if (Array.isArray(updated.items)) {
+      data.items    = updated.items;
+      data.accounts = updated.accounts || data.accounts;
+    }
+  } catch(err) {}
+  renderAll(); updateBadge(); updateStats();
+});
+
+function _wEsc(s) {
+  if (typeof s !== 'string') return '';
+  return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+document.getElementById('open-widget').addEventListener('click', openCaptureWidget);
