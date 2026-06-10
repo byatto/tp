@@ -116,8 +116,16 @@ function loadData() {
   return { items: [], accounts: DEFAULT_ACCOUNTS, types: DEFAULT_TYPES };
 }
 
+// PHASE 1.7 / 2.3: Wrap saveData in try/catch; on quota failure, surface a toast rather than silently losing data.
 function saveData() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error('Storage write error:', e);
+    // Show toast if the DOM is ready; if called very early it may not be — check first.
+    const toastEl = document.getElementById('toast');
+    if (toastEl) toast('Storage full — changes not saved');
+  }
   scheduleSync();
 }
 
@@ -198,8 +206,9 @@ if (cloudUrl) { setTimeout(pullFromCloud, 500); } else { setTimeout(() => setSyn
 
 // ═══ ITEM OPERATIONS ═══
 function addItem(text) {
+  // PHASE 2.5: Collision-resistant IDs with dash separator
   const item = {
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
     text: text.trim(), account: activeAccount, type: '', status: 'inbox',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     _tct: false, _deleted: false, _done: false,
@@ -362,6 +371,8 @@ function renderAccountDropdown() {
   if (lozengeInitial) lozengeInitial.textContent = initial;
   if (lozengeDot)     { lozengeDot.style.background = colour; lozengeDot.style.backgroundColor = colour; }
 
+  // PHASE 1.1: All interpolated values escaped with esc() or escHtml().
+  // PHASE 1.6: Only show the remove button when more than one account exists.
   dropdown.innerHTML = data.accounts.map(acc => {
     const inboxCount = getInboxItems(acc.name).length;
     const totalCount = data.items.filter(i => i.account === acc.name && !i._deleted && !i._done).length;
@@ -373,7 +384,7 @@ function renderAccountDropdown() {
     return `
       <div class="account-option ${acc.name === activeAccount ? 'active' : ''}" data-name="${esc(acc.name)}">
         <span class="account-option-left">
-          <span class="account-dot" style="background:${acc.color}"></span>
+          <span class="account-dot" style="background:${esc(acc.color)}"></span>
           <span class="account-option-name">${escHtml(acc.name)}</span>
           ${countLabel}
         </span>
@@ -389,17 +400,27 @@ function renderAccountDropdown() {
     });
   });
 
+  // PHASE 1.6: Account removal — guard last account; do NOT soft-delete items.
   dropdown.querySelectorAll('.account-remove').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const name = btn.dataset.name;
-      openModal('Remove Account?', `Delete "${name}" and all its items?`, null, () => {
-        data.accounts = data.accounts.filter(a => a.name !== name);
-        data.items.forEach(i => { if (i.account === name) { i._deleted = true; i._deletedAt = new Date().toISOString(); } });
-        saveData();
-        if (activeAccount === name) setActiveAccount(data.accounts[0]?.name || 'Personal');
-        renderAccountDropdown();
-      }, 'Remove', true);
+      // Belt-and-braces guard even though the button is hidden when only one account exists.
+      if (data.accounts.length <= 1) { toast('At least one account is required'); return; }
+      openModal(
+        'Remove Account?',
+        `Remove "${name}"? Items in this account will remain in the database and can be recovered by re-adding the account.`,
+        null,
+        () => {
+          data.accounts = data.accounts.filter(a => a.name !== name);
+          // Items are intentionally kept — do not soft-delete them.
+          saveData();
+          if (activeAccount === name) setActiveAccount(data.accounts[0].name);
+          else renderAccountDropdown();
+        },
+        'Remove',
+        true
+      );
     });
   });
 
@@ -451,7 +472,7 @@ function openTrashView() {
           return `<div style="padding:10px;border:1px solid var(--border-subtle);border-radius:6px;margin-bottom:8px;background:var(--bg-surface);">
             <div style="font-size:14px;line-height:1.5;margin-bottom:8px;color:var(--text-secondary);">${escHtml(item.text)}</div>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-              <span style="font-size:11px;color:${colour};font-weight:600;">${escHtml(item.account)}</span>
+              <span style="font-size:11px;color:${esc(colour)};font-weight:600;">${escHtml(item.account)}</span>
               <span style="font-size:11px;color:var(--text-muted);">Deleted ${date}</span>
               <div style="display:flex;gap:6px;margin-left:auto;">
                 <button class="subtle-btn trash-restore" data-id="${esc(item.id)}" style="font-size:11px;padding:4px 10px;">Restore</button>
@@ -585,12 +606,12 @@ function renderReview() {
             const s = getTypeStyle(t.key);
             const selected = item.type === t.key;
             const style = selected ? `background:${s.bg};color:${s.color};border-color:transparent;` : '';
-            return `<button class="type-btn ${selected ? 'selected' : ''}" style="${style}" data-type="${t.key}" data-id="${esc(item.id)}">${t.label}</button>`;
+            return `<button class="type-btn ${selected ? 'selected' : ''}" style="${style}" data-type="${t.key}" data-id="${esc(item.id)}">${escHtml(t.label)}</button>`;
           }).join('')}
         </div>
         <div class="file-confirm-row ${item.type ? 'visible' : ''}" id="confirm-row-${esc(item.id)}">
-          <button class="file-confirm-btn" data-id="${esc(item.id)}" data-type="${item.type || ''}">
-            File as ${item.type ? getTypeStyle(item.type).label : ''} →
+          <button class="file-confirm-btn" data-id="${esc(item.id)}" data-type="${esc(item.type || '')}">
+            File as ${item.type ? escHtml(getTypeStyle(item.type).label) : ''} →
           </button>
           <button class="file-cancel-btn" data-id="${esc(item.id)}">Cancel</button>
         </div>
@@ -717,7 +738,7 @@ function renderFilterBar() {
         const s = getTypeStyle(t.key);
         const active = activeFilter === t.key;
         const style = active ? `background:${s.bg};color:${s.color};border-color:transparent;` : '';
-        return `<button class="filter-btn ${active ? 'active' : ''}" style="${style}" data-type="${t.key}">${t.label}</button>`;
+        return `<button class="filter-btn ${active ? 'active' : ''}" style="${style}" data-type="${t.key}">${escHtml(t.label)}</button>`;
       }).join('')
     + `<button class="filter-btn ${activeFilter === 'inbox' ? 'active' : ''}" data-type="inbox">Inbox</button>`;
 }
@@ -741,8 +762,13 @@ function renderBrowse() {
     return;
   }
 
-  const tctItems = results.filter(i => i._tct);
-  const otherItems = results.filter(i => !i._tct);
+  // PHASE 2.4: Truncation indicator — cap at 50, show footer when more exist.
+  const BROWSE_LIMIT = 50;
+  const totalCount = results.length;
+  const displayResults = results.slice(0, BROWSE_LIMIT);
+
+  const tctItems = displayResults.filter(i => i._tct);
+  const otherItems = displayResults.filter(i => !i._tct);
 
   let html = '';
 
@@ -765,7 +791,7 @@ function renderBrowse() {
     for (const [accName, items] of groups) {
       const acc = data.accounts.find(a => a.name === accName);
       const colour = acc ? acc.color : '#888';
-      html += `<div class="account-group-header" style="color:${colour}">
+      html += `<div class="account-group-header" style="color:${esc(colour)}">
         <span class="account-group-dot"></span>
         <span class="account-group-name">${escHtml(accName)}</span>
         <span class="account-group-count">${items.length}</span>
@@ -774,6 +800,12 @@ function renderBrowse() {
     }
   } else {
     html += otherItems.map(item => renderBrowseCard(item)).join('');
+  }
+
+  if (totalCount > BROWSE_LIMIT) {
+    html += `<div style="text-align:center;padding:16px;font-size:13px;color:var(--text-muted);border-top:1px solid var(--border-subtle);margin-top:8px;">
+      Showing ${BROWSE_LIMIT} of ${totalCount} — refine your search to see more
+    </div>`;
   }
 
   list.innerHTML = html;
@@ -812,7 +844,7 @@ function renderBrowseCard(item) {
       <div class="card-swipe-delete">${trashSVG()}<span>Delete</span></div>
       <div class="card-inner">
         <div class="card-text-header">
-          <span class="type-badge" style="background:${typeStyle.bg};color:${typeStyle.color};">${typeStyle.label}</span>
+          <span class="type-badge" style="background:${typeStyle.bg};color:${typeStyle.color};">${escHtml(typeStyle.label)}</span>
           ${ageBadge}
           ${tctActive ? '<span class="tct-badge">★ TCT</span>' : ''}
         </div>
@@ -929,7 +961,7 @@ function renderWROverview(active, overdue, stale) {
         ${Object.entries(byCounts).sort((a,b) => b[1] - a[1]).map(([acc, count]) => {
           const accObj = data.accounts.find(a => a.name === acc);
           const color = accObj ? accObj.color : '#888';
-          return `<div class="wr-acc-row"><span class="account-dot" style="background:${color}"></span><span>${escHtml(acc)}</span><span class="wr-acc-count">${count}</span></div>`;
+          return `<div class="wr-acc-row"><span class="account-dot" style="background:${esc(color)}"></span><span>${escHtml(acc)}</span><span class="wr-acc-count">${count}</span></div>`;
         }).join('')}
       </div>
       <button class="capture-btn" id="wr-start-btn" style="margin-top:20px;">Let's go — ${wrItems.length} items</button>
@@ -975,9 +1007,9 @@ function renderWRCard() {
 
       <div class="wr-card ${ageClass}">
         <div class="wr-card-header">
-          <span class="account-dot" style="background:${accColor}"></span>
+          <span class="account-dot" style="background:${esc(accColor)}"></span>
           <span class="wr-card-account">${escHtml(item.account)}</span>
-          <span class="type-badge" style="background:${typeStyle.bg};color:${typeStyle.color};">${typeStyle.label}</span>
+          <span class="type-badge" style="background:${typeStyle.bg};color:${typeStyle.color};">${escHtml(typeStyle.label)}</span>
           <span class="age-badge ${ageClass}">${getAgeLabel(ageDays)}</span>
         </div>
         ${statusLine}
@@ -986,7 +1018,7 @@ function renderWRCard() {
         <div class="wr-type-row">
           <span class="wr-type-label">Type:</span>
           <select class="wr-type-select" id="wr-type-select">
-            ${TYPE_CONFIG.map(t => `<option value="${t.key}" ${item.type === t.key ? 'selected' : ''}>${t.label}</option>`).join('')}
+            ${TYPE_CONFIG.map(t => `<option value="${t.key}" ${item.type === t.key ? 'selected' : ''}>${escHtml(t.label)}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -1211,16 +1243,22 @@ document.getElementById('sync-btn').addEventListener('click', () => {
   else document.getElementById('cloud-btn').click();
 });
 
+// PHASE 1.5 + 2.6: Cloud config modal — enforce HTTPS; URL field uses type="url" for visibility.
 document.getElementById('cloud-btn').addEventListener('click', () => {
   openModal('Cloud Sync', 'Enter your Google Apps Script details:', ct => {
     ct.innerHTML = `
       <label class="modal-label">Script URL</label>
-      <input type="text" class="modal-input" id="cloud-url-input" value="${esc(cloudUrl)}" placeholder="https://script.google.com/...">
+      <input type="url" class="modal-input" id="cloud-url-input" value="${esc(cloudUrl)}" placeholder="https://script.google.com/...">
       <label class="modal-label">API Key</label>
       <input type="password" class="modal-input" id="cloud-key-input" value="${esc(cloudKey)}" placeholder="Your API key">`;
   }, () => {
     const url = document.getElementById('cloud-url-input').value.trim();
     const key = document.getElementById('cloud-key-input').value.trim();
+    // PHASE 1.5: Reject non-HTTPS URLs.
+    if (url && !url.startsWith('https://')) {
+      toast('Cloud URL must start with https:// — not saved');
+      return;
+    }
     if (url) {
       localStorage.setItem(CLOUD_URL_KEY, url); localStorage.setItem(CLOUD_KEY_KEY, key);
       cloudUrl = url; cloudKey = key;
@@ -1232,8 +1270,16 @@ document.getElementById('cloud-btn').addEventListener('click', () => {
   }, 'Save');
 });
 
+// PHASE 1.3: Export only items, accounts, and types — never credentials.
+// cloudUrl and cloudKey live in separate localStorage keys and are not in `data`,
+// so this is belt-and-braces: explicitly build the payload rather than dumping `data`.
 document.getElementById('export-btn').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const exportPayload = {
+    items:    data.items,
+    accounts: data.accounts,
+    types:    data.types
+  };
+  const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href = url; a.download = 'trigpoint-backup-' + new Date().toISOString().slice(0, 10) + '.json';
@@ -1241,53 +1287,127 @@ document.getElementById('export-btn').addEventListener('click', () => {
   toast('Backup downloaded');
 });
 
+// PHASE 1.4: Full import validation.
 document.getElementById('import-btn').addEventListener('click', () => document.getElementById('import-file').click());
 document.getElementById('import-file').addEventListener('change', e => {
-  const file = e.target.files[0]; if (!file) return;
+  // Guard cancelled picker.
+  const file = e.target.files[0];
+  if (!file) return;
+
   const reader = new FileReader();
   reader.onload = () => {
+    // Always reset so the same file can be re-imported.
+    e.target.value = '';
+
+    let parsed;
     try {
-      const imported = JSON.parse(reader.result);
-      if (!Array.isArray(imported.items)) throw new Error('Invalid format');
-      const existingIds = new Set(data.items.map(i => i.id));
-      let count = 0;
-      imported.items.forEach(item => { if (!existingIds.has(item.id)) { data.items.push(item); count++; } });
-      if (Array.isArray(imported.accounts)) {
-        imported.accounts.forEach(acc => {
-          const name = typeof acc === 'string' ? acc : acc.name;
-          if (!data.accounts.find(a => a.name === name))
-            data.accounts.push(typeof acc === 'string' ? { name: acc, color: '#888' } : acc);
-        });
+      parsed = JSON.parse(reader.result);
+    } catch (err) {
+      toast('Invalid backup file — could not parse JSON');
+      return;
+    }
+
+    // Top-level structure check.
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.items)) {
+      toast('Invalid backup file — missing items array');
+      return;
+    }
+
+    // Validate and filter items.
+    const VALID_STATUSES = new Set(['inbox', 'stored']);
+    const validItems = [];
+    for (const item of parsed.items) {
+      if (
+        item && typeof item === 'object' &&
+        typeof item.id === 'string' && item.id.length > 0 &&
+        typeof item.text === 'string' && item.text.length > 0 &&
+        typeof item.account === 'string' &&
+        (typeof item.status === 'string' ? VALID_STATUSES.has(item.status) : true)
+      ) {
+        // Coerce _deleted to boolean.
+        item._deleted = !!item._deleted;
+        validItems.push(item);
       }
-      data.items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      localStorage.removeItem(MIGRATED_KEY);
-      data = migrateV2toV3(data);
-      saveData(); renderAll();
-      toast('Imported ' + count + ' items');
-    } catch (err) { console.error(err); toast('Invalid backup file'); }
+      // Malformed items are silently dropped.
+    }
+
+    if (validItems.length === 0 && parsed.items.length > 0) {
+      toast('No valid items found in backup file');
+      return;
+    }
+
+    // Validate and sanitise accounts if present.
+    // PHASE 1.3 (import side): ignore any credentials that might be in the file.
+    const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+    let importedAccounts = [];
+    if (Array.isArray(parsed.accounts)) {
+      importedAccounts = parsed.accounts
+        .filter(acc => acc && typeof acc === 'object' && typeof acc.name === 'string' && acc.name.trim().length > 0)
+        .map(acc => ({
+          name:  acc.name.trim(),
+          color: typeof acc.color === 'string' && HEX_COLOR.test(acc.color) ? acc.color : '#0033CC'
+        }));
+    }
+
+    // Merge items (skip duplicates by id).
+    const existingIds = new Set(data.items.map(i => i.id));
+    let addedCount = 0;
+    for (const item of validItems) {
+      if (!existingIds.has(item.id)) { data.items.push(item); addedCount++; }
+    }
+
+    // Merge accounts (skip existing names, case-insensitive).
+    for (const acc of importedAccounts) {
+      if (!data.accounts.find(a => a.name.toLowerCase() === acc.name.toLowerCase())) {
+        data.accounts.push(acc);
+      }
+    }
+
+    data.items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    localStorage.removeItem(MIGRATED_KEY);
+    data = migrateV2toV3(data);
+    saveData(); renderAll();
+    toast(`Imported ${addedCount} item${addedCount !== 1 ? 's' : ''}`);
   };
-  reader.readAsText(file); e.target.value = '';
+  reader.readAsText(file);
 });
 
 document.getElementById('trash-btn').addEventListener('click', () => { settingsPanelOverlay.classList.remove('open'); openTrashView(); });
 document.getElementById('purge-btn').addEventListener('click', () => { settingsPanelOverlay.classList.remove('open'); openTrashView(); });
 
+// PHASE 1.7: Reset clears items AND config AND cloud credentials; leaves theme.
 document.getElementById('reset-btn').addEventListener('click', () => {
-  openModal('Reset App?', 'This deletes ALL local data. Cloud data is kept.', ct => {
-    ct.innerHTML = '<input type="text" class="modal-input" id="reset-confirm" placeholder="Type DELETE to confirm">';
-    setTimeout(() => {
-      const inp = document.getElementById('reset-confirm');
-      inp.addEventListener('input', () => {
-        document.getElementById('modal-confirm').disabled = inp.value !== 'DELETE';
-        document.getElementById('modal-confirm').style.opacity = inp.value === 'DELETE' ? '1' : '0.4';
-      });
-    }, 50);
-  }, () => {
-    data = { items: [], accounts: DEFAULT_ACCOUNTS, types: DEFAULT_TYPES };
-    localStorage.removeItem(MIGRATED_KEY);
-    saveData(); setActiveAccount('Personal'); toast('App reset');
-  }, 'Reset', true);
-  setTimeout(() => { document.getElementById('modal-confirm').disabled = true; document.getElementById('modal-confirm').style.opacity = '0.4'; }, 50);
+  openModal(
+    'Reset App?',
+    'Delete all items, accounts, and cloud settings. Cannot be undone.',
+    ct => {
+      ct.innerHTML = '<input type="text" class="modal-input" id="reset-confirm" placeholder="Type DELETE to confirm">';
+      setTimeout(() => {
+        const inp = document.getElementById('reset-confirm');
+        inp.addEventListener('input', () => {
+          document.getElementById('modal-confirm').disabled = inp.value !== 'DELETE';
+          document.getElementById('modal-confirm').style.opacity = inp.value === 'DELETE' ? '1' : '0.4';
+        });
+      }, 50);
+    },
+    () => {
+      // Remove all app data except theme.
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(CLOUD_URL_KEY);
+      localStorage.removeItem(CLOUD_KEY_KEY);
+      localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+      localStorage.removeItem(MIGRATED_KEY);
+      localStorage.removeItem(LAST_REVIEW_KEY);
+      localStorage.removeItem(REVIEW_SNOOZE_KEY);
+      location.reload();
+    },
+    'Reset',
+    true
+  );
+  setTimeout(() => {
+    document.getElementById('modal-confirm').disabled = true;
+    document.getElementById('modal-confirm').style.opacity = '0.4';
+  }, 50);
 });
 
 document.getElementById('colours-btn').addEventListener('click', () => {
@@ -1296,8 +1416,8 @@ document.getElementById('colours-btn').addEventListener('click', () => {
     ct.innerHTML = data.accounts.map((acc, idx) => `
       <div class="settings-list-item">
         <div class="settings-list-left">
-          <div class="settings-color-swatch" style="background:${acc.color}">
-            <input type="color" value="${acc.color}" data-idx="${idx}" title="Change colour">
+          <div class="settings-color-swatch" style="background:${esc(acc.color)}">
+            <input type="color" value="${esc(acc.color)}" data-idx="${idx}" title="Change colour">
           </div>
           <span style="font-weight:600;">${escHtml(acc.name)}</span>
         </div>
@@ -1444,7 +1564,6 @@ setTimeout(checkColourPrompt, 500);
 let _widgetWindow = null;
 
 function openCaptureWidget() {
-  // If already open, just bring it to the front
   if (_widgetWindow && !_widgetWindow.closed) {
     _widgetWindow.focus();
     return;
@@ -1470,7 +1589,7 @@ function openCaptureWidget() {
   _widgetWindow.focus();
 }
 
-// Refresh main app live when widget writes an item
+// Refresh main app live when widget writes an item.
 window.addEventListener('storage', e => {
   if (e.key !== STORAGE_KEY) return;
   try {
