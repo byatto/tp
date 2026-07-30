@@ -95,9 +95,11 @@ function loadData() {
       d.items = d.items.filter(i => i && typeof i.id === 'string' && typeof i.text === 'string');
       d.items.forEach(i => {
         if (!i.createdAt) i.createdAt = new Date().toISOString();
-        if (!i.account)   i.account   = d.accounts[0]?.name || 'Personal';
-        if (i.type === undefined) i.type = i.category || '';
         if (!i.status) i.status = 'inbox';
+        // Inbox items may legitimately be unassigned (account: ''); only backfill
+        // an account for items that have already been filed.
+        if (!i.account && i.status !== 'inbox') i.account = d.accounts[0]?.name || 'Personal';
+        if (i.type === undefined) i.type = i.category || '';
         if (i._done === undefined) i._done = false;
         if (i._tct === undefined) i._tct = i._urgent || false;
         if (i.dueDate === undefined) i.dueDate = null;
@@ -116,16 +118,8 @@ function loadData() {
   return { items: [], accounts: DEFAULT_ACCOUNTS, types: DEFAULT_TYPES };
 }
 
-// PHASE 1.7 / 2.3: Wrap saveData in try/catch; on quota failure, surface a toast rather than silently losing data.
 function saveData() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (e) {
-    console.error('Storage write error:', e);
-    // Show toast if the DOM is ready; if called very early it may not be — check first.
-    const toastEl = document.getElementById('toast');
-    if (toastEl) toast('Storage full — changes not saved');
-  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   scheduleSync();
 }
 
@@ -206,10 +200,9 @@ if (cloudUrl) { setTimeout(pullFromCloud, 500); } else { setTimeout(() => setSyn
 
 // ═══ ITEM OPERATIONS ═══
 function addItem(text) {
-  // PHASE 2.5: Collision-resistant IDs with dash separator
   const item = {
-    id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
-    text: text.trim(), account: activeAccount, type: '', status: 'inbox',
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    text: text.trim(), account: '', type: '', status: 'inbox',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     _tct: false, _deleted: false, _done: false,
     dueDate: null, completedAt: null
@@ -257,13 +250,14 @@ function restoreItem(item) {
   saveData();
 }
 
-function getInboxItems(account) {
-  const acc = account || activeAccount;
-  return data.items.filter(i => i.account === acc && i.status === 'inbox' && !i.type && !i._deleted && !i._done);
+// Global inbox: capture no longer assigns an account, so review/badge/dropdown
+// must all read from this one place rather than filtering by activeAccount.
+function getInboxItems() {
+  return data.items.filter(i => i.status === 'inbox' && !i.type && !i._deleted && !i._done);
 }
 
 function getAllInboxCount() {
-  return data.items.filter(i => i.status === 'inbox' && !i.type && !i._deleted && !i._done).length;
+  return getInboxItems().length;
 }
 
 function getActiveItems() {
@@ -315,7 +309,7 @@ function getAgeClass(item) {
 
 function searchItems(query, typeFilter, sort) {
   let results = getActiveItems();
-  if (!allAccounts) results = results.filter(i => i.account === activeAccount);
+  if (!allAccounts) results = results.filter(i => i.account === activeAccount || i.account === '');
   if (typeFilter === 'inbox') results = results.filter(i => !i.type);
   else if (typeFilter && typeFilter !== 'all') results = results.filter(i => i.type === typeFilter);
   if (query) {
@@ -371,20 +365,15 @@ function renderAccountDropdown() {
   if (lozengeInitial) lozengeInitial.textContent = initial;
   if (lozengeDot)     { lozengeDot.style.background = colour; lozengeDot.style.backgroundColor = colour; }
 
-  // PHASE 1.1: All interpolated values escaped with esc() or escHtml().
-  // PHASE 1.6: Only show the remove button when more than one account exists.
   dropdown.innerHTML = data.accounts.map(acc => {
-    const inboxCount = getInboxItems(acc.name).length;
     const totalCount = data.items.filter(i => i.account === acc.name && !i._deleted && !i._done).length;
-    const countLabel = inboxCount > 0
-      ? `<span class="account-option-count" style="background:var(--accent-glow);color:var(--accent)">${inboxCount} inbox</span>`
-      : totalCount > 0
-        ? `<span class="account-option-count">${totalCount}</span>`
-        : '';
+    const countLabel = totalCount > 0
+      ? `<span class="account-option-count">${totalCount}</span>`
+      : '';
     return `
       <div class="account-option ${acc.name === activeAccount ? 'active' : ''}" data-name="${esc(acc.name)}">
         <span class="account-option-left">
-          <span class="account-dot" style="background:${esc(acc.color)}"></span>
+          <span class="account-dot" style="background:${acc.color}"></span>
           <span class="account-option-name">${escHtml(acc.name)}</span>
           ${countLabel}
         </span>
@@ -400,27 +389,17 @@ function renderAccountDropdown() {
     });
   });
 
-  // PHASE 1.6: Account removal — guard last account; do NOT soft-delete items.
   dropdown.querySelectorAll('.account-remove').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const name = btn.dataset.name;
-      // Belt-and-braces guard even though the button is hidden when only one account exists.
-      if (data.accounts.length <= 1) { toast('At least one account is required'); return; }
-      openModal(
-        'Remove Account?',
-        `Remove "${name}"? Items in this account will remain in the database and can be recovered by re-adding the account.`,
-        null,
-        () => {
-          data.accounts = data.accounts.filter(a => a.name !== name);
-          // Items are intentionally kept — do not soft-delete them.
-          saveData();
-          if (activeAccount === name) setActiveAccount(data.accounts[0].name);
-          else renderAccountDropdown();
-        },
-        'Remove',
-        true
-      );
+      openModal('Remove Account?', `Delete "${name}" and all its items?`, null, () => {
+        data.accounts = data.accounts.filter(a => a.name !== name);
+        data.items.forEach(i => { if (i.account === name) { i._deleted = true; i._deletedAt = new Date().toISOString(); } });
+        saveData();
+        if (activeAccount === name) setActiveAccount(data.accounts[0]?.name || 'Personal');
+        renderAccountDropdown();
+      }, 'Remove', true);
     });
   });
 
@@ -445,7 +424,6 @@ function setActiveAccount(name) {
   activeAccount = name;
   localStorage.setItem(ACTIVE_ACCOUNT_KEY, name);
   renderAccountDropdown();
-  updateCaptureIndicator();
   renderAll();
 }
 
@@ -472,7 +450,7 @@ function openTrashView() {
           return `<div style="padding:10px;border:1px solid var(--border-subtle);border-radius:6px;margin-bottom:8px;background:var(--bg-surface);">
             <div style="font-size:14px;line-height:1.5;margin-bottom:8px;color:var(--text-secondary);">${escHtml(item.text)}</div>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-              <span style="font-size:11px;color:${esc(colour)};font-weight:600;">${escHtml(item.account)}</span>
+              <span style="font-size:11px;color:${colour};font-weight:600;">${escHtml(item.account || 'Unassigned')}</span>
               <span style="font-size:11px;color:var(--text-muted);">Deleted ${date}</span>
               <div style="display:flex;gap:6px;margin-left:auto;">
                 <button class="subtle-btn trash-restore" data-id="${esc(item.id)}" style="font-size:11px;padding:4px 10px;">Restore</button>
@@ -515,18 +493,6 @@ document.getElementById('account-btn').addEventListener('click', e => {
 document.addEventListener('click', e => {
   if (!e.target.closest('.account-selector')) document.getElementById('account-dropdown').classList.remove('open');
 });
-
-// ═══ CAPTURE ACCOUNT INDICATOR ═══
-function updateCaptureIndicator() {
-  const acc    = data.accounts.find(a => a.name === activeAccount);
-  const colour = (acc?.color && acc.color !== '#888' && acc.color !== '#888888') ? acc.color : '#0033CC';
-  const dot    = document.getElementById('indicator-dot');
-  const label  = document.getElementById('indicator-label');
-  const box    = document.getElementById('capture-account-indicator');
-  if (dot)   { dot.style.background = colour; }
-  if (label) label.textContent = activeAccount;
-  if (box)   box.style.borderColor = colour + '55';
-}
 
 // ═══ VIEW SWITCHING ═══
 function switchView(view) {
@@ -572,30 +538,21 @@ function renderReview() {
 
   document.getElementById('review-count').textContent = items.length + ' items';
 
-  const crossNotice = document.getElementById('cross-account-notice');
-  const allInbox = getAllInboxCount();
-  const otherInbox = allInbox - getInboxItems().length;
-  if (crossNotice) {
-    if (otherInbox > 0) {
-      crossNotice.classList.remove('hidden');
-      crossNotice.querySelector('.cross-account-text').textContent =
-        `${otherInbox} item${otherInbox !== 1 ? 's' : ''} waiting in other accounts`;
-    } else { crossNotice.classList.add('hidden'); }
-  }
-
   if (!items.length) {
     list.innerHTML = `<div class="empty-state">
       <div class="empty-icon">✓</div>
       <div class="empty-title">Inbox Clear</div>
-      <p>No items to review for ${escHtml(activeAccount)}</p>
+      <p>No items to review</p>
     </div>`;
     return;
   }
 
   list.innerHTML = items.map(item => {
-    const accOptions = data.accounts.map(a =>
-      `<option value="${esc(a.name)}" ${a.name === item.account ? 'selected' : ''}>${escHtml(a.name)}</option>`
-    ).join('');
+    const noAccountYet = !item.account;
+    const accOptions = `<option value="" disabled ${noAccountYet ? 'selected' : ''}>Assign account…</option>` +
+      data.accounts.map(a =>
+        `<option value="${esc(a.name)}" ${a.name === item.account ? 'selected' : ''}>${escHtml(a.name)}</option>`
+      ).join('');
     return `
     <div class="card" data-id="${esc(item.id)}">
       <div class="card-swipe-delete">${trashSVG()}<span>Delete</span></div>
@@ -606,12 +563,13 @@ function renderReview() {
             const s = getTypeStyle(t.key);
             const selected = item.type === t.key;
             const style = selected ? `background:${s.bg};color:${s.color};border-color:transparent;` : '';
-            return `<button class="type-btn ${selected ? 'selected' : ''}" style="${style}" data-type="${t.key}" data-id="${esc(item.id)}">${escHtml(t.label)}</button>`;
+            return `<button class="type-btn ${selected ? 'selected' : ''}" style="${style}" data-type="${t.key}" data-id="${esc(item.id)}">${t.label}</button>`;
           }).join('')}
         </div>
         <div class="file-confirm-row ${item.type ? 'visible' : ''}" id="confirm-row-${esc(item.id)}">
-          <button class="file-confirm-btn" data-id="${esc(item.id)}" data-type="${esc(item.type || '')}">
-            File as ${item.type ? escHtml(getTypeStyle(item.type).label) : ''} →
+          <select class="reassign-select file-account-select" id="file-account-${esc(item.id)}">${accOptions}</select>
+          <button class="file-confirm-btn" data-id="${esc(item.id)}" data-type="${item.type || ''}">
+            File as ${item.type ? getTypeStyle(item.type).label : ''} →
           </button>
           <button class="file-cancel-btn" data-id="${esc(item.id)}">Cancel</button>
         </div>
@@ -619,14 +577,8 @@ function renderReview() {
           <span class="card-meta">${formatTime(item.createdAt)}</span>
           <div class="card-actions">
             <button class="action-btn done-btn" data-id="${esc(item.id)}" title="Mark done">${doneSVG()}</button>
-            <button class="action-btn move" data-id="${esc(item.id)}" title="Move to account">${moveSVG()}</button>
             <button class="action-btn delete" data-action="delete" data-id="${esc(item.id)}" title="Delete">${trashSVG()}</button>
           </div>
-        </div>
-        <div class="reassign-panel" id="reassign-${esc(item.id)}">
-          <span class="reassign-label">Move to:</span>
-          <select class="reassign-select" id="reassign-sel-${esc(item.id)}">${accOptions}</select>
-          <button class="reassign-save" data-id="${esc(item.id)}">Save</button>
         </div>
       </div>
     </div>`;
@@ -654,9 +606,13 @@ function renderReview() {
   list.querySelectorAll('.file-confirm-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const type = btn.dataset.type;
-      updateItem(btn.dataset.id, { type, status: 'stored' });
+      const id = btn.dataset.id;
+      const sel = document.getElementById('file-account-' + id);
+      const account = sel ? sel.value : '';
+      if (!account) { toast('Choose an account first'); return; }
+      updateItem(id, { type, account, status: 'stored' });
       renderReview(); updateBadge(); updateStats();
-      toast('Filed as ' + getTypeStyle(type).label);
+      toast('Filed as ' + getTypeStyle(type).label + ' → ' + account);
     });
   });
 
@@ -738,7 +694,7 @@ function renderFilterBar() {
         const s = getTypeStyle(t.key);
         const active = activeFilter === t.key;
         const style = active ? `background:${s.bg};color:${s.color};border-color:transparent;` : '';
-        return `<button class="filter-btn ${active ? 'active' : ''}" style="${style}" data-type="${t.key}">${escHtml(t.label)}</button>`;
+        return `<button class="filter-btn ${active ? 'active' : ''}" style="${style}" data-type="${t.key}">${t.label}</button>`;
       }).join('')
     + `<button class="filter-btn ${activeFilter === 'inbox' ? 'active' : ''}" data-type="inbox">Inbox</button>`;
 }
@@ -762,13 +718,8 @@ function renderBrowse() {
     return;
   }
 
-  // PHASE 2.4: Truncation indicator — cap at 50, show footer when more exist.
-  const BROWSE_LIMIT = 50;
-  const totalCount = results.length;
-  const displayResults = results.slice(0, BROWSE_LIMIT);
-
-  const tctItems = displayResults.filter(i => i._tct);
-  const otherItems = displayResults.filter(i => !i._tct);
+  const tctItems = results.filter(i => i._tct);
+  const otherItems = results.filter(i => !i._tct);
 
   let html = '';
 
@@ -788,24 +739,28 @@ function renderBrowse() {
       if (!groups.has(item.account)) groups.set(item.account, []);
       groups.get(item.account).push(item);
     });
+    const unassignedItems = groups.get('') || null;
+    if (unassignedItems) groups.delete('');
     for (const [accName, items] of groups) {
       const acc = data.accounts.find(a => a.name === accName);
       const colour = acc ? acc.color : '#888';
-      html += `<div class="account-group-header" style="color:${esc(colour)}">
+      html += `<div class="account-group-header" style="color:${colour}">
         <span class="account-group-dot"></span>
         <span class="account-group-name">${escHtml(accName)}</span>
         <span class="account-group-count">${items.length}</span>
       </div>`;
       html += items.map(item => renderBrowseCard(item)).join('');
     }
+    if (unassignedItems) {
+      html += `<div class="account-group-header" style="color:var(--text-muted)">
+        <span class="account-group-dot"></span>
+        <span class="account-group-name">Unassigned</span>
+        <span class="account-group-count">${unassignedItems.length}</span>
+      </div>`;
+      html += unassignedItems.map(item => renderBrowseCard(item)).join('');
+    }
   } else {
     html += otherItems.map(item => renderBrowseCard(item)).join('');
-  }
-
-  if (totalCount > BROWSE_LIMIT) {
-    html += `<div style="text-align:center;padding:16px;font-size:13px;color:var(--text-muted);border-top:1px solid var(--border-subtle);margin-top:8px;">
-      Showing ${BROWSE_LIMIT} of ${totalCount} — refine your search to see more
-    </div>`;
   }
 
   list.innerHTML = html;
@@ -844,7 +799,7 @@ function renderBrowseCard(item) {
       <div class="card-swipe-delete">${trashSVG()}<span>Delete</span></div>
       <div class="card-inner">
         <div class="card-text-header">
-          <span class="type-badge" style="background:${typeStyle.bg};color:${typeStyle.color};">${escHtml(typeStyle.label)}</span>
+          <span class="type-badge" style="background:${typeStyle.bg};color:${typeStyle.color};">${typeStyle.label}</span>
           ${ageBadge}
           ${tctActive ? '<span class="tct-badge">★ TCT</span>' : ''}
         </div>
@@ -898,12 +853,6 @@ document.getElementById('search-clear').addEventListener('click', () => {
   renderBrowse();
 });
 document.getElementById('sort-select').addEventListener('change', renderBrowse);
-document.getElementById('cross-account-notice')?.addEventListener('click', () => {
-  const otherAccounts = data.accounts.filter(a => a.name !== activeAccount);
-  let best = null, bestCount = 0;
-  otherAccounts.forEach(a => { const c = getInboxItems(a.name).length; if (c > bestCount) { best = a.name; bestCount = c; } });
-  if (best) { setActiveAccount(best); switchView('review'); }
-});
 
 // ═══ WEEKLY REVIEW ═══
 let wrItems = [];
@@ -961,7 +910,7 @@ function renderWROverview(active, overdue, stale) {
         ${Object.entries(byCounts).sort((a,b) => b[1] - a[1]).map(([acc, count]) => {
           const accObj = data.accounts.find(a => a.name === acc);
           const color = accObj ? accObj.color : '#888';
-          return `<div class="wr-acc-row"><span class="account-dot" style="background:${esc(color)}"></span><span>${escHtml(acc)}</span><span class="wr-acc-count">${count}</span></div>`;
+          return `<div class="wr-acc-row"><span class="account-dot" style="background:${color}"></span><span>${escHtml(acc || 'Unassigned')}</span><span class="wr-acc-count">${count}</span></div>`;
         }).join('')}
       </div>
       <button class="capture-btn" id="wr-start-btn" style="margin-top:20px;">Let's go — ${wrItems.length} items</button>
@@ -1007,9 +956,9 @@ function renderWRCard() {
 
       <div class="wr-card ${ageClass}">
         <div class="wr-card-header">
-          <span class="account-dot" style="background:${esc(accColor)}"></span>
-          <span class="wr-card-account">${escHtml(item.account)}</span>
-          <span class="type-badge" style="background:${typeStyle.bg};color:${typeStyle.color};">${escHtml(typeStyle.label)}</span>
+          <span class="account-dot" style="background:${accColor}"></span>
+          <span class="wr-card-account">${escHtml(item.account || 'Unassigned')}</span>
+          <span class="type-badge" style="background:${typeStyle.bg};color:${typeStyle.color};">${typeStyle.label}</span>
           <span class="age-badge ${ageClass}">${getAgeLabel(ageDays)}</span>
         </div>
         ${statusLine}
@@ -1018,7 +967,7 @@ function renderWRCard() {
         <div class="wr-type-row">
           <span class="wr-type-label">Type:</span>
           <select class="wr-type-select" id="wr-type-select">
-            ${TYPE_CONFIG.map(t => `<option value="${t.key}" ${item.type === t.key ? 'selected' : ''}>${escHtml(t.label)}</option>`).join('')}
+            ${TYPE_CONFIG.map(t => `<option value="${t.key}" ${item.type === t.key ? 'selected' : ''}>${t.label}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -1243,22 +1192,16 @@ document.getElementById('sync-btn').addEventListener('click', () => {
   else document.getElementById('cloud-btn').click();
 });
 
-// PHASE 1.5 + 2.6: Cloud config modal — enforce HTTPS; URL field uses type="url" for visibility.
 document.getElementById('cloud-btn').addEventListener('click', () => {
   openModal('Cloud Sync', 'Enter your Google Apps Script details:', ct => {
     ct.innerHTML = `
       <label class="modal-label">Script URL</label>
-      <input type="url" class="modal-input" id="cloud-url-input" value="${esc(cloudUrl)}" placeholder="https://script.google.com/...">
+      <input type="text" class="modal-input" id="cloud-url-input" value="${esc(cloudUrl)}" placeholder="https://script.google.com/...">
       <label class="modal-label">API Key</label>
       <input type="password" class="modal-input" id="cloud-key-input" value="${esc(cloudKey)}" placeholder="Your API key">`;
   }, () => {
     const url = document.getElementById('cloud-url-input').value.trim();
     const key = document.getElementById('cloud-key-input').value.trim();
-    // PHASE 1.5: Reject non-HTTPS URLs.
-    if (url && !url.startsWith('https://')) {
-      toast('Cloud URL must start with https:// — not saved');
-      return;
-    }
     if (url) {
       localStorage.setItem(CLOUD_URL_KEY, url); localStorage.setItem(CLOUD_KEY_KEY, key);
       cloudUrl = url; cloudKey = key;
@@ -1270,16 +1213,8 @@ document.getElementById('cloud-btn').addEventListener('click', () => {
   }, 'Save');
 });
 
-// PHASE 1.3: Export only items, accounts, and types — never credentials.
-// cloudUrl and cloudKey live in separate localStorage keys and are not in `data`,
-// so this is belt-and-braces: explicitly build the payload rather than dumping `data`.
 document.getElementById('export-btn').addEventListener('click', () => {
-  const exportPayload = {
-    items:    data.items,
-    accounts: data.accounts,
-    types:    data.types
-  };
-  const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href = url; a.download = 'trigpoint-backup-' + new Date().toISOString().slice(0, 10) + '.json';
@@ -1287,127 +1222,53 @@ document.getElementById('export-btn').addEventListener('click', () => {
   toast('Backup downloaded');
 });
 
-// PHASE 1.4: Full import validation.
 document.getElementById('import-btn').addEventListener('click', () => document.getElementById('import-file').click());
 document.getElementById('import-file').addEventListener('change', e => {
-  // Guard cancelled picker.
-  const file = e.target.files[0];
-  if (!file) return;
-
+  const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
-    // Always reset so the same file can be re-imported.
-    e.target.value = '';
-
-    let parsed;
     try {
-      parsed = JSON.parse(reader.result);
-    } catch (err) {
-      toast('Invalid backup file — could not parse JSON');
-      return;
-    }
-
-    // Top-level structure check.
-    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.items)) {
-      toast('Invalid backup file — missing items array');
-      return;
-    }
-
-    // Validate and filter items.
-    const VALID_STATUSES = new Set(['inbox', 'stored']);
-    const validItems = [];
-    for (const item of parsed.items) {
-      if (
-        item && typeof item === 'object' &&
-        typeof item.id === 'string' && item.id.length > 0 &&
-        typeof item.text === 'string' && item.text.length > 0 &&
-        typeof item.account === 'string' &&
-        (typeof item.status === 'string' ? VALID_STATUSES.has(item.status) : true)
-      ) {
-        // Coerce _deleted to boolean.
-        item._deleted = !!item._deleted;
-        validItems.push(item);
+      const imported = JSON.parse(reader.result);
+      if (!Array.isArray(imported.items)) throw new Error('Invalid format');
+      const existingIds = new Set(data.items.map(i => i.id));
+      let count = 0;
+      imported.items.forEach(item => { if (!existingIds.has(item.id)) { data.items.push(item); count++; } });
+      if (Array.isArray(imported.accounts)) {
+        imported.accounts.forEach(acc => {
+          const name = typeof acc === 'string' ? acc : acc.name;
+          if (!data.accounts.find(a => a.name === name))
+            data.accounts.push(typeof acc === 'string' ? { name: acc, color: '#888' } : acc);
+        });
       }
-      // Malformed items are silently dropped.
-    }
-
-    if (validItems.length === 0 && parsed.items.length > 0) {
-      toast('No valid items found in backup file');
-      return;
-    }
-
-    // Validate and sanitise accounts if present.
-    // PHASE 1.3 (import side): ignore any credentials that might be in the file.
-    const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
-    let importedAccounts = [];
-    if (Array.isArray(parsed.accounts)) {
-      importedAccounts = parsed.accounts
-        .filter(acc => acc && typeof acc === 'object' && typeof acc.name === 'string' && acc.name.trim().length > 0)
-        .map(acc => ({
-          name:  acc.name.trim(),
-          color: typeof acc.color === 'string' && HEX_COLOR.test(acc.color) ? acc.color : '#0033CC'
-        }));
-    }
-
-    // Merge items (skip duplicates by id).
-    const existingIds = new Set(data.items.map(i => i.id));
-    let addedCount = 0;
-    for (const item of validItems) {
-      if (!existingIds.has(item.id)) { data.items.push(item); addedCount++; }
-    }
-
-    // Merge accounts (skip existing names, case-insensitive).
-    for (const acc of importedAccounts) {
-      if (!data.accounts.find(a => a.name.toLowerCase() === acc.name.toLowerCase())) {
-        data.accounts.push(acc);
-      }
-    }
-
-    data.items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    localStorage.removeItem(MIGRATED_KEY);
-    data = migrateV2toV3(data);
-    saveData(); renderAll();
-    toast(`Imported ${addedCount} item${addedCount !== 1 ? 's' : ''}`);
+      data.items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      localStorage.removeItem(MIGRATED_KEY);
+      data = migrateV2toV3(data);
+      saveData(); renderAll();
+      toast('Imported ' + count + ' items');
+    } catch (err) { console.error(err); toast('Invalid backup file'); }
   };
-  reader.readAsText(file);
+  reader.readAsText(file); e.target.value = '';
 });
 
 document.getElementById('trash-btn').addEventListener('click', () => { settingsPanelOverlay.classList.remove('open'); openTrashView(); });
 document.getElementById('purge-btn').addEventListener('click', () => { settingsPanelOverlay.classList.remove('open'); openTrashView(); });
 
-// PHASE 1.7: Reset clears items AND config AND cloud credentials; leaves theme.
 document.getElementById('reset-btn').addEventListener('click', () => {
-  openModal(
-    'Reset App?',
-    'Delete all items, accounts, and cloud settings. Cannot be undone.',
-    ct => {
-      ct.innerHTML = '<input type="text" class="modal-input" id="reset-confirm" placeholder="Type DELETE to confirm">';
-      setTimeout(() => {
-        const inp = document.getElementById('reset-confirm');
-        inp.addEventListener('input', () => {
-          document.getElementById('modal-confirm').disabled = inp.value !== 'DELETE';
-          document.getElementById('modal-confirm').style.opacity = inp.value === 'DELETE' ? '1' : '0.4';
-        });
-      }, 50);
-    },
-    () => {
-      // Remove all app data except theme.
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(CLOUD_URL_KEY);
-      localStorage.removeItem(CLOUD_KEY_KEY);
-      localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
-      localStorage.removeItem(MIGRATED_KEY);
-      localStorage.removeItem(LAST_REVIEW_KEY);
-      localStorage.removeItem(REVIEW_SNOOZE_KEY);
-      location.reload();
-    },
-    'Reset',
-    true
-  );
-  setTimeout(() => {
-    document.getElementById('modal-confirm').disabled = true;
-    document.getElementById('modal-confirm').style.opacity = '0.4';
-  }, 50);
+  openModal('Reset App?', 'This deletes ALL local data. Cloud data is kept.', ct => {
+    ct.innerHTML = '<input type="text" class="modal-input" id="reset-confirm" placeholder="Type DELETE to confirm">';
+    setTimeout(() => {
+      const inp = document.getElementById('reset-confirm');
+      inp.addEventListener('input', () => {
+        document.getElementById('modal-confirm').disabled = inp.value !== 'DELETE';
+        document.getElementById('modal-confirm').style.opacity = inp.value === 'DELETE' ? '1' : '0.4';
+      });
+    }, 50);
+  }, () => {
+    data = { items: [], accounts: DEFAULT_ACCOUNTS, types: DEFAULT_TYPES };
+    localStorage.removeItem(MIGRATED_KEY);
+    saveData(); setActiveAccount('Personal'); toast('App reset');
+  }, 'Reset', true);
+  setTimeout(() => { document.getElementById('modal-confirm').disabled = true; document.getElementById('modal-confirm').style.opacity = '0.4'; }, 50);
 });
 
 document.getElementById('colours-btn').addEventListener('click', () => {
@@ -1416,8 +1277,8 @@ document.getElementById('colours-btn').addEventListener('click', () => {
     ct.innerHTML = data.accounts.map((acc, idx) => `
       <div class="settings-list-item">
         <div class="settings-list-left">
-          <div class="settings-color-swatch" style="background:${esc(acc.color)}">
-            <input type="color" value="${esc(acc.color)}" data-idx="${idx}" title="Change colour">
+          <div class="settings-color-swatch" style="background:${acc.color}">
+            <input type="color" value="${acc.color}" data-idx="${idx}" title="Change colour">
           </div>
           <span style="font-weight:600;">${escHtml(acc.name)}</span>
         </div>
@@ -1427,7 +1288,7 @@ document.getElementById('colours-btn').addEventListener('click', () => {
         const idx = parseInt(inp.dataset.idx);
         data.accounts[idx].color = inp.value;
         inp.closest('.settings-color-swatch').style.background = inp.value;
-        saveData(); renderAccountDropdown(); updateCaptureIndicator();
+        saveData(); renderAccountDropdown();
       });
     });
   }, () => renderAll(), 'Done');
@@ -1458,7 +1319,7 @@ document.getElementById('colour-prompt-save').addEventListener('click', () => {
     const acc = data.accounts.find(a => a.name === inp.dataset.acc);
     if (acc) acc.color = inp.value;
   });
-  saveData(); renderAccountDropdown(); updateCaptureIndicator();
+  saveData(); renderAccountDropdown();
   document.getElementById('colour-prompt-overlay').classList.remove('open');
   toast('Account colours saved');
 });
@@ -1551,7 +1412,6 @@ function renderAll() {
 
 // ═══ INIT ═══
 renderAccountDropdown();
-updateCaptureIndicator();
 renderAll();
 if (window.innerWidth > 600) captureInput.focus();
 setTimeout(checkColourPrompt, 500);
@@ -1564,6 +1424,7 @@ setTimeout(checkColourPrompt, 500);
 let _widgetWindow = null;
 
 function openCaptureWidget() {
+  // If already open, just bring it to the front
   if (_widgetWindow && !_widgetWindow.closed) {
     _widgetWindow.focus();
     return;
@@ -1589,7 +1450,7 @@ function openCaptureWidget() {
   _widgetWindow.focus();
 }
 
-// Refresh main app live when widget writes an item.
+// Refresh main app live when widget writes an item
 window.addEventListener('storage', e => {
   if (e.key !== STORAGE_KEY) return;
   try {
