@@ -359,11 +359,11 @@ function renderAccountDropdown() {
   const current  = data.accounts.find(a => a.name === activeAccount) || data.accounts[0];
   const colour   = (current?.color && current.color !== '#888' && current.color !== '#888888') ? current.color : '#0033CC';
 
-  const initial = (current?.name || activeAccount).charAt(0).toUpperCase();
-  const lozengeInitial = document.getElementById('account-initial');
-  const lozengeDot     = document.getElementById('account-dot');
-  if (lozengeInitial) lozengeInitial.textContent = initial;
-  if (lozengeDot)     { lozengeDot.style.background = colour; lozengeDot.style.backgroundColor = colour; }
+  const lozengeName = document.getElementById('account-name');
+  const lozengeDot   = document.getElementById('account-dot');
+  const accountLabel = current?.name || activeAccount;
+  if (lozengeName) { lozengeName.textContent = accountLabel; lozengeName.title = accountLabel; }
+  if (lozengeDot)  { lozengeDot.style.background = colour; lozengeDot.style.backgroundColor = colour; }
 
   dropdown.innerHTML = data.accounts.map(acc => {
     const totalCount = data.items.filter(i => i.account === acc.name && !i._deleted && !i._done).length;
