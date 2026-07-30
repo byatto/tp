@@ -73,24 +73,6 @@
     color: var(--text);
   }
 
-  .acc-select {
-    flex: 1;
-    min-width: 0;
-    max-width: 180px;
-    padding: 6px 10px;
-    background: var(--bg);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 100px;
-    font-family: var(--font);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-  .acc-select:focus { border-color: var(--accent); }
-
   /* ── Main ── */
   main {
     flex: 1;
@@ -181,7 +163,6 @@
     </div>
     <span class="logo-text">TrigPoint</span>
   </div>
-  <select class="acc-select" id="acc-select"></select>
 </header>
 
 <main>
@@ -194,14 +175,8 @@
 
 <script>
   // ── Storage keys — must match app.js exactly ──────────────────────────────
-  const STORAGE_KEY        = 'trigpoint_v2_data';
-  const THEME_KEY          = 'trigpoint_v2_theme';
-  const ACTIVE_ACCOUNT_KEY = 'trigpoint_v2_account';
-
-  const DEFAULT_ACCOUNTS = [
-    { name: 'Personal', color: '#0033CC' },
-    { name: 'Work',     color: '#00875A' }
-  ];
+  const STORAGE_KEY = 'trigpoint_v2_data';
+  const THEME_KEY   = 'trigpoint_v2_theme';
 
   // ── Apply theme from localStorage ────────────────────────────────────────
   function applyTheme() {
@@ -231,33 +206,10 @@
     }
   }
 
-  // ── Populate account selector ─────────────────────────────────────────────
-  function populateAccounts() {
-    let accounts = DEFAULT_ACCOUNTS;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const d = JSON.parse(raw);
-        if (Array.isArray(d.accounts) && d.accounts.length) {
-          accounts = d.accounts;
-        }
-      }
-    } catch (e) {}
-
-    const active = localStorage.getItem(ACTIVE_ACCOUNT_KEY) || accounts[0]?.name || '';
-    const sel    = document.getElementById('acc-select');
-
-    sel.innerHTML = accounts.map(a =>
-      `<option value="${esc(a.name)}" ${a.name === active ? 'selected' : ''}>${esc(a.name)}</option>`
-    ).join('');
-  }
-
   // ── Log item ──────────────────────────────────────────────────────────────
   function doLog() {
     const txt = document.getElementById('txt').value.trim();
     if (!txt) return;
-
-    const accName = document.getElementById('acc-select').value;
 
     let stored = { items: [], accounts: [] };
     try {
@@ -269,7 +221,7 @@
     const item = {
       id:          Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       text:        txt,
-      account:     accName,
+      account:     '',
       type:        '',
       status:      'inbox',
       createdAt:   new Date().toISOString(),
@@ -296,16 +248,9 @@
     setTimeout(() => fb.classList.remove('show'), 1800);
   }
 
-  // ── Escape helper ─────────────────────────────────────────────────────────
-  function esc(s) {
-    if (typeof s !== 'string') return '';
-    return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  // ── React to main app changes (theme toggle, account add/remove) ──────────
+  // ── React to main app changes (theme toggle) ───────────────────────────────
   window.addEventListener('storage', e => {
-    if (e.key === THEME_KEY)   { applyTheme(); return; }
-    if (e.key === STORAGE_KEY) { populateAccounts(); }
+    if (e.key === THEME_KEY) { applyTheme(); }
   });
 
   // ── Wire events ───────────────────────────────────────────────────────────
@@ -319,7 +264,6 @@
 
   // ── Init ──────────────────────────────────────────────────────────────────
   applyTheme();
-  populateAccounts();
 </script>
 </body>
 </html>
