@@ -495,6 +495,11 @@ document.addEventListener('click', e => {
 });
 
 // ═══ VIEW SWITCHING ═══
+function updateAccountSelectorVisibility() {
+  const sel = document.getElementById('account-selector');
+  if (sel) sel.classList.toggle('hidden', currentView === 'capture');
+}
+
 function switchView(view) {
   currentView = view;
   if (view !== 'browse') allAccounts = false;
@@ -505,6 +510,7 @@ function switchView(view) {
   document.querySelectorAll('#nav-desktop button, #nav-mobile button').forEach(b => {
     b.classList.toggle('active', b.dataset.view === view);
   });
+  updateAccountSelectorVisibility();
   if (view === 'capture') document.getElementById('capture-input').focus();
   renderAll();
 }
@@ -1412,6 +1418,7 @@ function renderAll() {
 
 // ═══ INIT ═══
 renderAccountDropdown();
+updateAccountSelectorVisibility();
 renderAll();
 if (window.innerWidth > 600) captureInput.focus();
 setTimeout(checkColourPrompt, 500);
