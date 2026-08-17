@@ -864,6 +864,27 @@ document.getElementById('sort-select').addEventListener('change', renderBrowse);
 let wrItems = [];
 let wrIndex = 0;
 let wrStats = { kept: 0, done: 0, killed: 0, edited: 0, tct: 0 };
+let wrLastAction = null;
+
+function wrCaptureState(item) {
+  return { id: item.id, text: item.text, type: item.type, _tct: item._tct, _done: item._done,
+    completedAt: item.completedAt, _deleted: item._deleted, _deletedAt: item._deletedAt, updatedAt: item.updatedAt };
+}
+
+function wrRestoreState(snapshot) {
+  const item = data.items.find(i => i.id === snapshot.id);
+  if (item) Object.assign(item, snapshot);
+}
+
+function wrUndoLast() {
+  if (!wrLastAction) return;
+  wrRestoreState(wrLastAction.itemBefore);
+  saveData();
+  wrStats = wrLastAction.statsBefore;
+  wrIndex = wrLastAction.index;
+  wrLastAction = null;
+  renderWRCard();
+}
 
 function startWeeklyReview() {
   document.getElementById('settings-panel-overlay').classList.remove('open');
@@ -885,6 +906,7 @@ function startWeeklyReview() {
   wrItems = [...overdue, ...stale, ...healthy, ...notesSomeday];
   wrIndex = 0;
   wrStats = { kept: 0, done: 0, killed: 0, edited: 0, tct: 0, startCount: active.length };
+  wrLastAction = null;
 
   switchView('weekly-review');
 
@@ -958,7 +980,7 @@ function renderWRCard() {
       <div class="wr-progress">
         <div class="wr-progress-bar" style="width:${((wrIndex + 1) / wrItems.length * 100)}%"></div>
       </div>
-      <div class="wr-progress-label">${wrIndex + 1} of ${wrItems.length}</div>
+      <div class="wr-progress-label">${wrIndex + 1} of ${wrItems.length}${wrLastAction ? ' &nbsp;·&nbsp; <button class="wr-undo-link" id="wr-undo">Undo last</button>' : ''}</div>
 
       <div class="wr-card ${ageClass}">
         <div class="wr-card-header">
@@ -987,22 +1009,37 @@ function renderWRCard() {
     </div>`;
 
   document.getElementById('wr-keep').addEventListener('click', () => {
-    applyWREdits(item); wrStats.kept++; wrIndex++; renderWRCard();
+    const itemBefore = wrCaptureState(item), statsBefore = { ...wrStats };
+    applyWREdits(item); wrStats.kept++;
+    wrLastAction = { itemBefore, statsBefore, index: wrIndex };
+    wrIndex++; renderWRCard();
   });
   document.getElementById('wr-done').addEventListener('click', () => {
-    applyWREdits(item); markDone(item.id); wrStats.done++; wrIndex++; renderWRCard();
+    const itemBefore = wrCaptureState(item), statsBefore = { ...wrStats };
+    applyWREdits(item); markDone(item.id); wrStats.done++;
+    wrLastAction = { itemBefore, statsBefore, index: wrIndex };
+    wrIndex++; renderWRCard();
   });
   document.getElementById('wr-kill').addEventListener('click', () => {
-    deleteItem(item.id); wrStats.killed++; wrIndex++; renderWRCard();
+    const itemBefore = wrCaptureState(item), statsBefore = { ...wrStats };
+    deleteItem(item.id); wrStats.killed++;
+    wrLastAction = { itemBefore, statsBefore, index: wrIndex };
+    wrIndex++; renderWRCard();
   });
 
   const tctBtn = document.getElementById('wr-tct');
   if (tctBtn) {
     tctBtn.addEventListener('click', () => {
+      const itemBefore = wrCaptureState(item), statsBefore = { ...wrStats };
       applyWREdits(item); toggleTCT(item.id);
-      wrStats.tct++; wrStats.kept++; wrIndex++; renderWRCard();
+      wrStats.tct++; wrStats.kept++;
+      wrLastAction = { itemBefore, statsBefore, index: wrIndex };
+      wrIndex++; renderWRCard();
     });
   }
+
+  const undoBtnEl = document.getElementById('wr-undo');
+  if (undoBtnEl) undoBtnEl.addEventListener('click', wrUndoLast);
 }
 
 function applyWREdits(item) {
@@ -1036,11 +1073,14 @@ function renderWRSummary() {
         <span class="wr-summary-change">${wrStats.startCount ? `(was ${wrStats.startCount})` : ''}</span>
       </div>
       <button class="capture-btn" id="wr-finish-btn" style="margin-top:24px;">Done</button>
+      ${wrLastAction ? '<button class="subtle-btn" id="wr-undo-summary" style="margin-top:10px;width:100%;">Undo last action</button>' : ''}
     </div>`;
 
   document.getElementById('wr-finish-btn').addEventListener('click', () => {
     renderAll(); switchView('browse');
   });
+  const undoSummaryBtn = document.getElementById('wr-undo-summary');
+  if (undoSummaryBtn) undoSummaryBtn.addEventListener('click', wrUndoLast);
 }
 
 function checkReviewBanner() {
